@@ -6,8 +6,7 @@ release/
 .DS_Store
 # 下载产物与本地配置不入库
 downloads/
-site-rules/*.json
-!site-rules/*.example.json
+
 
 # IDE 配置文件
 .vscode/
