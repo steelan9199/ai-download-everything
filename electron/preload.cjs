@@ -3,7 +3,7 @@
  * preload 桥：用 contextBridge 只暴露白名单 API，渲染层碰不到 Node 能力（安全边界）。
  * 渲染层只通过 window.api 与主进程通信。
  */
-import { contextBridge, ipcRenderer } from "electron";
+const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("api", {
   // —— 设置 / 自检 ——

@@ -1,4 +1,4 @@
-const { spawnSync } = require("child_process");
+import { spawnSync } from "node:child_process";
 
 const message =
   process.argv[2] || `Update: ${new Date().toLocaleString("zh-CN")}`;

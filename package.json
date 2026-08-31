@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "个人自用视频下载器：yt-dlp 直下普通站 + Electron 内嵌浏览器拦截 Cloudflare/HLS 难站，大模型作为按需顾问/脚本制造者",
   "main": "electron/main.js",
+  "type": "module",
   "private": true,
   "author": "personal",
   "license": "MIT",
