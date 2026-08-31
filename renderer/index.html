@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI 视频下载器</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <header>
+      <span class="brand">AI 视频下载器</span>
+      <nav class="tabs">
+        <button :class="{ active: tab === 'home' }" @click="tab = 'home'">下载</button>
+        <button :class="{ active: tab === 'settings' }" @click="tab = 'settings'">设置</button>
+      </nav>
+    </header>
+
+    <!-- 环境缺失横幅：给出指引，不装死 -->
+    <div v-if="check && !check.allReady" class="banner">
+      <b>运行环境还没就绪</b>，点「设置」按下面的提示处理（视频下载器需要 ffmpeg 和 yt-dlp）
+      <template v-for="k in ['ffmpeg', 'ytdlp']">
+        <div v-if="check[k] && check[k].help" class="help">
+          <div class="help-title">{{ check[k].help.title }}</div>
+          <div v-for="(s, i) in check[k].help.steps" :key="i" class="help-step">{{ s }}</div>
+        </div>
+      </template>
+      <div><a class="link" @click="tab = 'settings'">去填写路径 →</a></div>
+    </div>
+
+    <!-- 下载页 -->
+    <main v-if="tab === 'home'">
+      <div class="card">
+        <input v-model.trim="url" class="url-input" placeholder="粘贴视频网址，例如 https://www.youtube.com/watch?v=..." @keyup.enter="startDownload" />
+        <div class="row">
+          <select v-model="engine">
+            <option value="auto">引擎：自动（推荐）</option>
+            <option value="ytdlp">引擎：yt-dlp 直下</option>
+            <option value="browser">引擎：浏览器拦截</option>
+          </select>
+          <button class="primary" :disabled="downloading" @click="startDownload">{{ downloading ? '下载中…' : '下载' }}</button>
+          <button v-if="downloading" class="ghost" @click="cancel">取消</button>
+        </div>
+      </div>
+
+      <div v-if="downloading || progress > 0" class="card">
+        <div class="bar"><div class="fill" :style="{ width: progress + '%' }"></div></div>
+        <div class="muted">{{ Number(progress).toFixed(1) }}%<span v-if="speed"> · {{ speed }}</span><span v-if="eta"> · 剩余 {{ eta }}</span></div>
+      </div>
+
+      <div v-if="statusText" class="status">{{ statusText }}</div>
+
+      <div v-if="downloadSuccess" class="row spaced">
+        <button class="primary" @click="openDownload">打开文件夹并选中文件</button>
+      </div>
+
+      <label class="muted toggle"><input type="checkbox" v-model="advancedMode" /> 高级模式</label>
+
+      <div v-if="advancedMode" class="card advanced">
+        <div class="adv-row"><span>诊断摘要</span><div class="mono">{{ diagnostic || '（无）' }}</div></div>
+        <div class="adv-row"><span>大模型调用次数</span><b>{{ aiCalls }}</b></div>
+        <div class="adv-row"><span>本次结果</span><div class="mono">{{ resultInfo || '（无）' }}</div></div>
+        <div class="adv-row"><span>脚本执行日志</span>
+          <div class="logbox"><div v-for="(l, i) in logs" :key="i" class="logline">{{ l }}</div></div>
+        </div>
+        <div class="adv-row">
+          <input v-model.trim="aiQuestion" placeholder="问 AI 一句，例如：这个 403 怎么处理？" @keyup.enter="askAI" />
+          <button class="ghost" :disabled="aiBusy" @click="askAI">问 AI</button>
+        </div>
+        <div v-if="aiAnswer" class="adv-row"><span>AI 回复</span><div class="mono ai-answer">{{ aiAnswer }}</div></div>
+      </div>
+    </main>
+
+    <!-- 设置页 -->
+    <main v-else>
+      <div class="card">
+        <h3>下载目录（必填）</h3>
+        <div class="row">
+          <input v-model.trim="settings.downloadDir" placeholder="保存视频的文件夹" />
+          <button class="ghost" @click="browseDir">浏览</button>
+        </div>
+        <h3>ffmpeg 路径（留空会自动在系统 PATH 里找）</h3>
+        <div class="row">
+          <input v-model.trim="settings.ffmpegPath" placeholder="例如 D:\...\ffmpeg.exe" />
+          <button class="ghost" @click="browseFile('ffmpegPath', '选择 ffmpeg.exe')">浏览</button>
+        </div>
+        <h3>yt-dlp.exe 路径（留空自动找）</h3>
+        <div class="row">
+          <input v-model.trim="settings.ytdlpPath" placeholder="例如 D:\software\yt-dlp.exe" />
+          <button class="ghost" @click="browseFile('ytdlpPath', '选择 yt-dlp.exe')">浏览</button>
+        </div>
+        <h3>大模型（OpenAI 兼容，可选）</h3>
+        <div class="row"><input type="password" v-model="settings.ai.apiKey" placeholder="API Key" /></div>
+        <div class="row spaced"><input v-model.trim="settings.ai.baseURL" placeholder="baseURL，默认 https://api.openai.com/v1" /></div>
+        <div class="row spaced"><input v-model.trim="settings.ai.model" placeholder="模型名，默认 gpt-4o-mini" /></div>
+        <label class="muted toggle"><input type="checkbox" v-model="settings.ai.autoCall" /> 允许在异常兜底时自动调用大模型（默认关，更省 token）</label>
+        <label class="muted toggle warn"><input type="checkbox" v-model="settings.fullAccess" /> 临时授权本机全权（仅本次任务，结束自动关）</label>
+        <div class="row right">
+          <button class="primary" @click="saveSettings">保存设置</button>
+        </div>
+        <div v-if="savedTip" class="muted">{{ savedTip }}</div>
+      </div>
+    </main>
+
+    <!-- 点选式问题弹窗 -->
+    <div v-if="question" class="modal">
+      <div class="modal-box">
+        <p class="q-prompt">{{ question.prompt }}</p>
+        <div class="q-opts">
+          <button v-for="o in question.options" :key="o.value" class="q-opt" @click="answer(o.value)">{{ o.label }}</button>
+        </div>
+        <textarea v-model="customAnswer" class="q-custom" placeholder="其他 / 用大白话补充一两句（可选）"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <script src="../node_modules/vue/dist/vue.global.prod.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

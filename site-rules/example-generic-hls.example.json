@@ -1,0 +1,13 @@
+{
+  "id": "example-generic-hls",
+  "host": "example.com",
+  "match": "example\\.com",
+  "kind": "settings",
+  "note": "示例规则：某站 m3u8 需要自定义 Referer 才能返回 200。程序命中此规则时会自动带上这些请求头。",
+  "settings": {
+    "referer": "https://example.com/",
+    "extraHeaders": {
+      "X-Requested-With": "XMLHttpRequest"
+    }
+  }
+}

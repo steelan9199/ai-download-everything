@@ -1,0 +1,33 @@
+{
+  "name": "ai-video-downloader",
+  "version": "0.1.0",
+  "description": "个人自用视频下载器：yt-dlp 直下普通站 + Electron 内嵌浏览器拦截 Cloudflare/HLS 难站，大模型作为按需顾问/脚本制造者",
+  "main": "electron/main.js",
+  "private": true,
+  "author": "personal",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "selfcheck": "electron . --selfcheck",
+    "dist": "electron-builder --win"
+  },
+  "dependencies": {
+    "vue": "^3.4.38"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.personal.ai-video-downloader",
+    "win": {
+      "target": "portable"
+    },
+    "files": [
+      "electron/**",
+      "renderer/**",
+      "site-rules/**",
+      "package.json"
+    ]
+  }
+}
