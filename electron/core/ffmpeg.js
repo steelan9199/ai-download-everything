@@ -110,3 +110,76 @@ export async function probeDuration(
   if (!m) return null;
   return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60 + parseFloat(m[3]);
 }
+
+/** 探测远程/本地媒体元信息：时长、分辨率、是否含声音（点选候选流前展示用）。
+ *  带 headers 过防盗链；-t 1 只读约 1 秒即退出，避免把整片下下来。
+ */
+export async function probeMedia(
+  ffmpegPath,
+  input,
+  { headers = "", timeLimitMs = 15000, onLine = () => {} } = {},
+) {
+  const args = ["-hide_banner", "-y"];
+  if (headers) args.push("-headers", headers);
+  args.push("-i", input, "-t", "1", "-c", "copy", "-f", "null", "-");
+  let stderr = "";
+  try {
+    const r = await runSpawn(ffmpegPath, args, {
+      onLine: (chunk) => {
+        stderr += chunk;
+        onLine(chunk);
+      },
+      timeLimitMs,
+    });
+    stderr += r.stderr || "";
+  } catch (e) {
+    stderr += (e && e.message) || "";
+  }
+  return parseProbe(stderr);
+}
+
+function parseProbe(stderr) {
+  const out = {
+    duration: null,
+    width: null,
+    height: null,
+    hasVideo: false,
+    hasAudio: false,
+  };
+  const d = /Duration:\s*(\d+):(\d+):(\d+\.?\d*)/.exec(stderr);
+  if (d)
+    out.duration =
+      parseInt(d[1], 10) * 3600 + parseInt(d[2], 10) * 60 + parseFloat(d[3]);
+  out.hasVideo = /Stream #0:\d+[^\n]*Video:/.test(stderr);
+  out.hasAudio = /Stream #0:\d+[^\n]*Audio:/.test(stderr);
+  const res = /Video:[^\n]*?\s(\d{2,5})x(\d{2,5})[\s,]/i.exec(stderr);
+  if (res) {
+    out.width = parseInt(res[1], 10);
+    out.height = parseInt(res[2], 10);
+  }
+  return out;
+}
+
+/** 音视频双流合成：纯画面 + 纯声音 → 一个 mp4（-c copy 不重编码，秒级无损） */
+export async function mergeAV(
+  ffmpegPath,
+  videoFile,
+  audioFile,
+  outputFile,
+  { onLine = () => {} } = {},
+) {
+  const args = [
+    "-y",
+    "-i",
+    videoFile,
+    "-i",
+    audioFile,
+    "-c",
+    "copy",
+    "-movflags",
+    "+faststart",
+    outputFile,
+  ];
+  await runSpawn(ffmpegPath, args, { onLine });
+  return outputFile;
+}

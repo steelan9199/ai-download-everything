@@ -118,9 +118,11 @@ createApp({
           break;
         case 'diagnostic': this.diagnostic = ev.msg; break;
         case 'found-m3u8': this.pushLog('抓到 m3u8: ' + ev.url); break;
+        case 'found-media': this.pushLog('抓到视频直链: ' + ev.url); break;
         case 'edge-play': this.pushLog('进入边播边存，共 ' + ev.count + ' 个分片'); break;
         case 'merge-start': this.statusText = '正在合并视频…'; this.pushLog('ffmpeg 合并 → ' + ev.file); break;
         case 'merge-done': this.statusText = '合并完成 ✓'; this.pushLog('完成: ' + ev.file); break;
+        case 'direct-done': this.statusText = '下载完成 ✓'; this.pushLog('完成: ' + ev.file); break;
         case 'log': this.pushLog((ev.level === 'error' ? '❌ ' : '') + ev.msg); break;
         default: this.pushLog(JSON.stringify(ev)); break;
       }

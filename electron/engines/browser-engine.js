@@ -53,6 +53,15 @@ export class BrowserInterceptEngine {
 
     const ses = session.fromPartition(this.partition);
     this.ses = ses;
+    // 抖音/字节系「打开 App」深链用自定义协议（bytedance: 等）。把这些 scheme 注册成空处理器，
+    // 在导航层之前就被吞掉，Windows 就不会再弹「获取打开此链接的应用」。
+    for (const scheme of ["bytedance", "snssdk1128", "snssdk"]) {
+      try {
+        ses.protocol.handle(scheme, () => new Response(null, { status: 204 }));
+      } catch (_) {
+        /* 个别 scheme 注册失败不影响主流程 */
+      }
+    }
     const filter = { urls: ["*://*/*"] };
     const onReq = (details, cb) => {
       if (/\.m3u8(\?.*)?$/i.test(details.url)) {
@@ -69,6 +78,27 @@ export class BrowserInterceptEngine {
       cb({});
     };
     ses.webRequest.onBeforeRequest(filter, onReq);
+
+    // 非 HLS 直链（抖音这类签名 mp4，URL 不带 .mp4 后缀）：抖音/DASH 会把「纯画面」和
+    // 「纯声音」拆成两条独立流。这里先统一收进一个候选池（content-type 仅作弱提示），
+    // 「是画面还是声音」交给下载前 ffmpeg 探测（hasVideo / hasAudio）最终判定。
+    const mediaCandidates = []; // { url, type, kind }
+    const seenMedia = new Set();
+    const onHeaders = (details, cb) => {
+      const raw = details.responseHeaders || {};
+      const ctArr = raw["content-type"] || raw["Content-Type"] || [];
+      const ct = String(Array.isArray(ctArr) ? ctArr[0] || "" : ctArr);
+      if (!isLikelyMedia(details.url, ct) || seenMedia.has(details.url)) {
+        cb({});
+        return;
+      }
+      seenMedia.add(details.url);
+      mediaCandidates.push({ url: details.url, type: ct, kind: ctKind(ct) });
+      if (mediaCandidates.length === 1)
+        this.onEvent({ type: "found-media", url: details.url });
+      cb({});
+    };
+    ses.webRequest.onHeadersReceived(filter, onHeaders);
 
     // 打开可见窗口，让真人能看画面、点播放、过验证码/成人确认
     const win = new BrowserWindow({
@@ -106,6 +136,29 @@ export class BrowserInterceptEngine {
       m3u8Url = pickM3u8(m3u8List);
     }
     if (!m3u8Url && segUrls.length) m3u8Url = null; // 只拿到分片没有 m3u8，走边播边存
+
+    // 非 HLS 直链：把页面正在播放的 <video>/<audio> 地址也扫进来（抖音播放器可能用 currentSrc 指到 CDN）
+    if (!m3u8Url) {
+      const pageMedia = await this.grabPageMedia();
+      for (const m of pageMedia) {
+        if (seenMedia.has(m.url)) continue;
+        seenMedia.add(m.url);
+        mediaCandidates.push({
+          url: m.url,
+          type: m.type || "",
+          kind: m.kind || null,
+          pageDuration: m.duration && Number.isFinite(m.duration) ? m.duration : null,
+          pageWidth: m.width || null,
+          pageHeight: m.height || null,
+        });
+      }
+    }
+    // 抓到直链就走「探测 → 分流 → 点选 → 下载 → 合成」完整流程；没抓到才走「人喂链接」
+    if (!m3u8Url && mediaCandidates.length) {
+      const dctx = await this.collectContext(url);
+      this.onEvent({ type: "status", msg: "抓到媒体直链，正在探测时长……" });
+      return await this.downloadAndMergeAV(mediaCandidates, dctx);
+    }
 
     if (!m3u8Url) {
       const manual = await this.askUser({
@@ -169,6 +222,172 @@ export class BrowserInterceptEngine {
         /* ignore */
       }
     }
+  }
+
+  /** 从页面里正在播放的 <video>/<audio> 元素拿媒体地址（抖音等直链站用 currentSrc 指到 CDN）。
+   *  顺带取已加载的时长/分辨率，作为点选展示的一等数据（网页已解码，无需再探测）。 */
+  async grabPageMedia() {
+    if (!this.win || this.win.isDestroyed()) return [];
+    try {
+      const items = await this.win.webContents.executeJavaScript(
+        `(() => {
+          const out = [];
+          document.querySelectorAll('video,audio').forEach((el) => {
+            const s = el.currentSrc || el.src;
+            if (!s) return;
+            out.push({
+              url: s,
+              kind: el.tagName.toLowerCase(),
+              duration: Number.isFinite(el.duration) ? el.duration : null,
+              width: el.videoWidth || null,
+              height: el.videoHeight || null,
+            });
+          });
+          return out;
+        })()`,
+        true,
+      );
+      return Array.isArray(items)
+        ? items.filter((m) => m && /^https?:/i.test(m.url))
+        : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /** 把一条直链下载到工作目录临时文件（后续交给 ffmpeg 合成），返回本地路径 */
+  async downloadToTemp(url, ext, ctx) {
+    const buf = await http.getBuffer(url, {
+      headers: this.buildHeaders(ctx, url),
+      timeoutMs: 120000,
+    });
+    const file = path.join(
+      this.workDir,
+      `${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`,
+    );
+    fs.writeFileSync(file, buf);
+    return file;
+  }
+
+  /** 非 HLS 直链主流程：探测候选流的时长/分辨率/有无画面/有无声音 → 人工点选画面流 → 下载 → 合成 */
+  async downloadAndMergeAV(all, ctx) {
+    const probed = await this.probeCandidates(all, ctx);
+
+    // 关键：画面/声音以「探测出的内容」为准，而不是 URL 后缀。抖音的纯音频流
+    // （无视频轨）绝不能混进画面点选列表，否则就会「下成 mp4 却只有声音」。
+    const videoList = probed.filter((c) => {
+      if (c.hasVideo === true) return true; // 确有视频轨 → 画面
+      if (c.hasAudio === true) return false; // 只有声音 → 归声音
+      if (c.kind === "audio" || /^audio\//i.test(String(c.type || ""))) return false;
+      return true; // 探测失败：默认当画面（单文件老站）
+    });
+    const audioList = probed.filter(
+      (c) => c.hasAudio === true && c.hasVideo !== true,
+    );
+
+    const byDurDesc = (a, b) => (b.duration ?? -1) - (a.duration ?? -1);
+    videoList.sort(byDurDesc);
+    audioList.sort(byDurDesc);
+
+    if (videoList.length === 0) {
+      if (audioList.length === 0) throw new Error("没抓到任何媒体直链");
+      this.onEvent({ type: "status", msg: "只抓到声音流（无画面），直接存音频" });
+      const f = await this.downloadToTemp(
+        audioList[0].url,
+        extFromContentType(audioList[0].type) || ".m4a",
+        ctx,
+      );
+      return await this.publishDirect(f);
+    }
+
+    let chosen;
+    if (videoList.length === 1) chosen = videoList[0];
+    else chosen = await this.askPickVideo(videoList, audioList);
+    if (!chosen) throw new Error("没抓到画面流");
+
+    const vFile = await this.downloadToTemp(
+      chosen.url,
+      extFromContentType(chosen.type) || extFromUrl(chosen.url) || ".mp4",
+      ctx,
+    );
+    this.onEvent({ type: "status", msg: "画面流已下载，正在处理声音……" });
+
+    if (chosen.hasAudio) return await this.publishDirect(vFile);
+
+    const audio = audioList[0];
+    if (!audio) {
+      this.onEvent({ type: "status", msg: "没抓到独立声音流，直接输出画面（可能无声音）" });
+      return await this.publishDirect(vFile);
+    }
+    const aFile = await this.downloadToTemp(
+      audio.url,
+      extFromContentType(audio.type) || ".m4a",
+      ctx,
+    );
+    const outFile = path.join(this.downloadDir, `video_${Date.now()}.mp4`);
+    this.onEvent({ type: "merge-start", file: outFile });
+    await ffmpeg.mergeAV(this.ffmpegPath, vFile, aFile, outFile, {
+      onLine: (l) => this.onLog({ level: "info", msg: l.trim() }),
+    });
+    this.onEvent({ type: "merge-done", file: outFile });
+    return outFile;
+  }
+
+  /** 把已就位的本地文件发布到下载目录（无需合成时的成品搬运） */
+  async publishDirect(tempFile) {
+    const ext = path.extname(tempFile) || ".mp4";
+    const outFile = path.join(this.downloadDir, `video_${Date.now()}${ext}`);
+    fs.copyFileSync(tempFile, outFile);
+    this.onEvent({ type: "direct-done", file: outFile });
+    return outFile;
+  }
+
+  /** 批量探测候选流：并行调用 ffmpeg 拿时长/分辨率/有无声音，页面已解码的时长优先采用 */
+  async probeCandidates(list, ctx) {
+    return Promise.all(
+      list.map(async (m) => {
+        let info = { duration: null, width: null, height: null, hasAudio: false };
+        if (this.ffmpegPath) {
+          const headerStr = Object.entries(this.buildHeaders(ctx, m.url))
+            .map(([k, v]) => `${k}: ${v}`)
+            .join("\r\n");
+          try {
+            info = await ffmpeg.probeMedia(this.ffmpegPath, m.url, {
+              headers: headerStr,
+            });
+          } catch (_) {
+            info = { duration: null, width: null, height: null, hasAudio: false };
+          }
+        }
+        if (m.pageDuration != null && m.pageDuration > 0)
+          info.duration = m.pageDuration;
+        if (m.pageWidth) {
+          info.width = m.pageWidth;
+          info.height = m.pageHeight;
+        }
+        return { ...m, ...info };
+      }),
+    );
+  }
+
+  /** 让人从候选画面流里点选一条（按时长从长到短排列） */
+  async askPickVideo(pics, auds) {
+    const options = pics.map((p, i) => ({
+      value: String(i),
+      label:
+        `${fmtDuration(p.duration)}` +
+        (p.width && p.height ? ` · ${p.width}×${p.height}` : " · 分辨率未知") +
+        (p.hasAudio
+          ? " · 自带声音"
+          : ` · 无声音${auds.length ? "（可合成）" : ""}`),
+    }));
+    const ans = await this.askUser({
+      id: "pick-video",
+      prompt: "抓到多条画面流（按时长从长到短排列）。请点选你要的那条（通常选最长的完整版）：",
+      options,
+    });
+    const idx = Number(ans && ans.choice);
+    return Number.isInteger(idx) && pics[idx] ? pics[idx] : pics[0];
   }
 
   /** 收集站点会话上下文：Cookie（含 cf_clearance）+ UA + Referer，用于重发请求 */
@@ -369,6 +588,59 @@ export class BrowserInterceptEngine {
 /** 从捕获到的 m3u8 列表里挑最像媒体流的（优先带 .m3u8 且非广告前缀）。简单策略：取第一个 */
 function pickM3u8(list) {
   return list.length ? list[0] : null;
+}
+
+/** content-type → 弱提示「video / audio」：只作探测失败时的兜底，不作为最终判定 */
+function ctKind(ct) {
+  const s = String(ct || "");
+  if (/^video\//i.test(s)) return "video";
+  if (/^audio\//i.test(s)) return "audio";
+  return null;
+}
+
+/** 响应是否可能是媒体直链（收集前的粗筛，避免把 JS/CSS 也塞进候选池） */
+function isLikelyMedia(url, ct) {
+  if (ctKind(ct)) return true;
+  if (/^application\/octet-stream$/i.test(String(ct || "")) && looksLikeMediaUrl(url))
+    return true;
+  return /\.(mp4|m4v|mov|webm|flv|m4a|mp3|aac)(\?.*)?$/i.test(url);
+}
+
+/** 秒数 → 「x分xx秒」/「x秒」的可读时长 */
+function fmtDuration(sec) {
+  if (sec == null || !Number.isFinite(sec) || sec < 0) return "时长未知";
+  const total = Math.round(sec);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  if (m === 0) return `${s}秒`;
+  return `${m}分${String(s).padStart(2, "0")}秒`;
+}
+
+/** 判断 URL 是否像媒体直链（配合 application/octet-stream 这种不写 video/ 的 CDN） */
+function looksLikeMediaUrl(url) {
+  return /aweme\/v1\/play|douyinvod|mime_type=video|video_id=/i.test(url);
+}
+
+/** content-type → 文件后缀 */
+function extFromContentType(ct) {
+  const m = /^video\/([a-z0-9.+-]+)/i.exec(String(ct || ""));
+  if (!m) return null;
+  const t = m[1].toLowerCase();
+  const map = {
+    mp4: ".mp4",
+    "x-flv": ".flv",
+    webm: ".webm",
+    quicktime: ".mov",
+    "x-matroska": ".mkv",
+    mp2t: ".ts",
+  };
+  return map[t] || "." + t.split("+")[0];
+}
+
+/** URL 里带媒体后缀时给出扩展名（兜底） */
+function extFromUrl(url) {
+  const m = /\.(mp4|webm|mov|mkv|flv|ts|m4v|avi)(\?.*)?$/i.exec(String(url));
+  return m ? "." + m[1].toLowerCase() : null;
 }
 
 /** 解析 Copy as cURL 命令：抽出 URL + 请求头（Cookie/Referer/UA 等） */

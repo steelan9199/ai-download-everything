@@ -52,4 +52,24 @@ if (isSelfCheck) {
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
   });
+
+  // 拦截「自定义协议 / 外部 App」跳转：抖音等网页会尝试 location.href = 'douyin://…'
+  // 去唤起外部应用，Windows 没装对应 App 时就会弹「获取打开此链接的应用」。这里静默吞掉，
+  // 只放行 http(s)，既不弹框、也不让页面真的跳出去。
+  app.on("web-contents-created", (_event, contents) => {
+    const isWeb = (u) => /^https?:\/\//i.test(String(u || ""));
+    // 任意层级（主页面 + 内嵌 iframe 子页面）发起的「自定义协议」跳转都拦掉
+    contents.on("will-frame-navigate", (details) => {
+      if (!isWeb(details.url)) details.preventDefault();
+    });
+    contents.on("will-navigate", (event, url) => {
+      if (!isWeb(url)) event.preventDefault();
+    });
+    contents.on("will-redirect", (event, url) => {
+      if (!isWeb(url)) event.preventDefault();
+    });
+    contents.setWindowOpenHandler(({ url }) =>
+      isWeb(url) ? { action: "allow" } : { action: "deny" },
+    );
+  });
 }
