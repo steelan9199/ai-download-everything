@@ -7,6 +7,10 @@
 
 ---
 
+## 仓库地址
+
+https://github.com/steelan9199/ai-download-everything
+
 ## 一句话原理：三层分工，严格省 token
 
 | 角色 | 谁来做 | 花不花 token | 干什么 |
