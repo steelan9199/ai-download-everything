@@ -2,6 +2,10 @@
 /**
  * preload 桥：用 contextBridge 只暴露白名单 API，渲染层碰不到 Node 能力（安全边界）。
  * 渲染层只通过 window.api 与主进程通信。
+ *
+ * ⚠ 注意：main.js 加载的是本文件（preload.cjs，CommonJS），因为本项目 package.json 是
+ * "type": "module"，同目录若放 .js 会被当成 ESM 而加载失败。历史上这里存在过一份
+ * electron/preload.js（ESM 版，未被引用），已删除以免改错文件——要加桥就加在本文件。
  */
 const { contextBridge, ipcRenderer } = require("electron");
 
@@ -14,6 +18,8 @@ contextBridge.exposeInMainWorld("api", {
   pickFile: (title) => ipcRenderer.invoke("dialog:pick-file", title),
 
   // —— 下载 ——
+  // 粘贴净化：把分享文案洗净成网址列表（纯字符串处理，零网络、零 token）
+  extractLinks: (text) => ipcRenderer.invoke("links:extract", text),
   startDownload: (payload) => ipcRenderer.invoke("download:start", payload),
   cancelDownload: () => ipcRenderer.send("download:cancel"),
 

@@ -32,7 +32,9 @@ createApp({
       settings: { downloadDir: '', ffmpegPath: '', ytdlpPath: '', ai: { apiKey: '', baseURL: '', model: '', autoCall: false }, fullAccess: false },
       question: null,
       questionMinimized: false,
-      customAnswer: ''
+      customAnswer: '',
+      // 多链接候选弹层
+      linkPicker: { open: false, links: [] }
     };
   },
   methods: {
@@ -60,6 +62,56 @@ createApp({
       const p = await window.api.pickFile(title);
       if (p) this.settings[key] = p;
     },
+    // —— 粘贴即净化：把「分享文案」洗净成一个网址 ——
+    // 契约：单链接就地替换、零打断（Ctrl+Z 可还原原文）；多链接才弹列表让人点；零命中完全不打扰。
+    async onPaste(e) {
+      const text = ((e.clipboardData || window.clipboardData).getData('text') || '').trim();
+      if (!text) return;
+
+      let r = null;
+      try {
+        r = await window.api.extractLinks(text);
+      } catch (_) {
+        return; // 桥不可用就让浏览器走默认粘贴，绝不吞掉用户粘进来的东西
+      }
+      if (!r || !r.ok) return; // 一个链接都没有：原样粘进去，不打扰
+
+      e.preventDefault();
+
+      if (r.count === 1) {
+        this.insertUrl(r.primary, r.cleaned);
+        if (r.cleaned) this.pushLog('粘贴净化：' + r.links[0].label + ' → ' + r.primary);
+      } else {
+        this.linkPicker = { open: true, links: r.links };
+        this.pushLog('粘贴内容里有 ' + r.count + ' 个链接，等用户点选');
+      }
+    },
+
+    /**
+     * 把网址写进输入框。
+     * 用 execCommand('insertText') 而不是直接改 v-model —— 它会进浏览器 undo 栈，
+     * 用户 Ctrl+Z 能还原出粘进来的原文；同时也触发 input 事件，v-model 自动同步。
+     * @param {string} url
+     * @param {boolean} replaceAll 粘的是一坨文案时整框替换（否则新链接会插到光标处，和旧内容粘成一坨）
+     */
+    insertUrl(url, replaceAll) {
+      const el = this.$refs.urlInput;
+      if (!el) { this.url = url; return; }
+      el.focus();
+      if (replaceAll) el.select();
+      document.execCommand('insertText', false, url);
+    },
+
+    chooseLink(l) {
+      this.linkPicker = { open: false, links: [] };
+      this.insertUrl(l.url, true);
+      this.pushLog('已选择：' + l.label + ' → ' + l.url);
+    },
+
+    closeLinkPicker() {
+      this.linkPicker = { open: false, links: [] };
+    },
+
     async startDownload() {
       if (!this.url) { this.statusText = '请先粘贴一个网址'; return; }
       this.downloading = true;

@@ -119,7 +119,9 @@ export async function probeMedia(
   input,
   { headers = "", timeLimitMs = 15000, onLine = () => {} } = {},
 ) {
-  const args = ["-hide_banner", "-y"];
+  // -rw_timeout：网络 I/O 超时（微秒），8 秒没数据 ffmpeg 自己退出，
+  // 避免 CDN 静默丢连接时 ffmpeg 干等（外层还有 timeLimitMs 进程级兜底）
+  const args = ["-hide_banner", "-y", "-rw_timeout", "8000000"];
   if (headers) args.push("-headers", headers);
   args.push("-i", input, "-t", "1", "-c", "copy", "-f", "null", "-");
   let stderr = "";

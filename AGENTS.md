@@ -29,11 +29,11 @@ ai-download-video/
 ├── README.md
 ├── electron/
 │   ├── main.js                 # 主进程入口（含 --selfcheck 命令行自检）
-│   ├── preload.js              # contextBridge 白名单桥（安全边界）
+│   ├── preload.cjs             # contextBridge 白名单桥（安全边界，main.js 加载的是这份）
 │   ├── ipc.js                  # IPC 注册 + 点选提问桥
 │   ├── settings.js             # 设置持久化
 │   ├── startup-check.js        # 启动自检（ffmpeg/yt-dlp/目录）
-│   ├── core/                   # hls.js downloader.js ffmpeg.js http.js
+│   ├── core/                   # hls.js downloader.js ffmpeg.js http.js link-extractor.js(粘贴净化)
 │   ├── engines/                # ytdlp-engine.js browser-engine.js kuaishou-engine.js(快手适配器) orchestrator.js
 │   ├── knowledge/              # rules.js(错误码规则表) site-rules.js(站点规则库沉淀)
 │   └── ai/                     # advisor.js(大模型顾问) sandbox.js(受限沙箱)
@@ -104,6 +104,7 @@ npm run selfcheck
 ## 使用
 
 1. 粘贴网址 → 点「下载」。默认先走 yt-dlp 直下（覆盖绝大多数普通站）。
+   - **粘贴即净化**：把抖音/快手等 App 的「复制链接」整段粘进来就行（例如 `9.48 NJi:/ 04/27 ... https://v.douyin.com/UE-lb0mo4So/ 复制此链接，打开Dou音搜索，直接观看视频！`）。程序自动剥掉文案、话题标签和中文尾巴，输入框里只剩干净网址，**Ctrl+Z 可还原原文**；一段里识别出多个链接时才弹列表让你点一个。实现见 `electron/core/link-extractor.js`（纯字符串处理，零网络、零 token）。
 2. yt-dlp 失败 / 命中 Cloudflare、HLS 难站 → 自动切「浏览器拦截」：弹出内嵌 Chromium 窗口打开页面，自动点播放，后台抓 `.m3u8` 与分片。
 3. 需要真人时，程序用**「点选 + 自定义补充」**问你一眼（例如「视频在播了吗：在播/转圈/报错/弹验证码」），点一下或补一句即可，不抛开放式填空。
 4. 程序并发拉全部分片，交给 ffmpeg 合并，输出到「下载目录」。
@@ -127,9 +128,18 @@ npm run selfcheck
   - **破解定位/会话参数全速抓**：拿到 Cookie/请求头后并发直拉全部分段，快但依赖会话有效。
 - **AES-128 加密流**：自动下 key，本地化 m3u8 后交给 ffmpeg 一步解密+合并。
 - **断点续传 / 失败重试 / 多线程 / >1GB**：按分片粒度续传、指数退避重试、并发下载、原子落盘。
-- **音视频分离（DASH）站点（抖音等）**：画面和声音是「两条独立流 + 一条短预览」。程序会对每条候选流探测时长/分辨率/有无画面/有无声音，多条画面时弹**「按时长从长到短」的点选**，选中后自动下载画面 + 声音交给 ffmpeg 合成完整视频。详见 [references/dash-audio-video-split.md](references/dash-audio-video-split.md)。
+- **音视频分离（DASH）站点（抖音等）**：画面和声音是「两条独立流 + 一条短预览」。程序会对每条候选流探测时长/分辨率/有无画面/有无声音，多条画面时弹**「按时长从长到短」的点选**，选中后自动下载画面 + 声音交给 ffmpeg 合成完整视频。**抖音已实战验证通过（13分29秒/1080p 带声音）**，排障与复用要点见 [references/douyin-download-notes.md](references/douyin-download-notes.md)；通用原理另见 [references/dash-audio-video-split.md](references/dash-audio-video-split.md)。
 - **网页弹「获取打开此链接的应用」系统弹窗**（抖音等字节系站点会跳 `bytedance://` 等深链唤起 App）：已在主进程 + 浏览器引擎两层静默拦截；遇到同类型弹窗先看 [references/block-external-protocol-popups.md](references/block-external-protocol-popups.md)。
 - **快手视频**（`v.kuaishou.com` 分享短链 / `www.kuaishou.com/short-video/<id>`）：yt-dlp 不支持该站，程序内置**快手适配器**（`engines/kuaishou-engine.js`）——短链跳到网页版后，页面 HTML 内嵌的 `__APOLLO_STATE__` 直接带 `photoUrl` 完整 mp4 直链（H.264，CDN 支持 Range、不强制 Cookie），纯 HTTP 解析后流式下载（进度/断点续传/重试，成品用视频文案命名），**不开浏览器、不花 token**；撞滑块/登录墙时自动弹内嵌浏览器，真人过验证后从页面 JS 上下文/网络拦截取回直链再下。快手 `kwai://` 等 App 深链弹窗同样静默拦截。图文/直播内容暂不支持。
+
+### 3）粘贴净化（不需要网络，秒级）
+
+```powershell
+npm run test:links        # 纯逻辑断言：26 条脏文案 → 期望网址
+npm run smoke:paste       # 端到端：preload 桥 → IPC → 提取器，并用真实 ClipboardEvent 验证输入框
+```
+
+`smoke:paste` 守的是这类回归：preload 桥漏改、IPC 通道名改错、多链接时污染输入框。
 
 ---
 
@@ -211,7 +221,7 @@ npm run dist
 
 ## 文档维护约定
 
-- 本文件超过 300 行就拆分：把深水专题内容挪到 `references/`，主文档只留概述 + 引用链接（现有：`block-external-protocol-popups.md`、`dash-audio-video-split.md`、`iqiyi-download-handoff.md` 爱奇艺下载排障交接）。
+- 本文件超过 300 行就拆分：把深水专题内容挪到 `references/`，主文档只留概述 + 引用链接（现有：`block-external-protocol-popups.md`、`dash-audio-video-split.md`、`iqiyi-download-handoff.md` 爱奇艺下载排障交接、`douyin-download-notes.md` 抖音排障）。
 
 ---
 

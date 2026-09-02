@@ -26,7 +26,6 @@ import * as sandbox from "../ai/sandbox.js";
  */
 export async function download(opts) {
   const {
-    url,
     engine = "auto",
     settings,
     tools,
@@ -35,6 +34,11 @@ export async function download(opts) {
     onLog = () => {},
   } = opts;
   const downloadDir = settings.downloadDir;
+  // 入口归一化：去掉粘贴带进来的首尾空白/换行；抖音「精选/发现/首页」等页面用
+  // ?modal_id=<视频ID> 弹视频窗，yt-dlp 只认识 /video/<ID>，改写成标准视频页后
+  // yt-dlp 可直接直下（DASH 画面+声音自动合并），绕开浏览器拦截整条难路。
+  const url = normalizeUrl(opts.url);
+  onLog({ level: "info", msg: "目标地址：" + url });
 
   // ① 先查站点规则库：命中已沉淀脚本就复用，零 token
   const rule = siteRules.matchRule(url);
@@ -366,6 +370,18 @@ function safeHost(url) {
   } catch (_) {
     return url;
   }
+}
+
+/** 入口 URL 归一化：trim 空白/换行；抖音 modal_id 弹窗链接改写为 /video/<ID> 标准页 */
+function normalizeUrl(raw) {
+  let u = String(raw || "").trim();
+  // 粘贴时可能带上了 Markdown 反引号/尖括号，一并剥掉
+  u = u.replace(/^[<`'"\s]+|[<`'"\s]+$/g, "");
+  const m = /^https?:\/\/(?:www\.)?douyin\.com\/[^\s?]*\?[^#]*\bmodal_id=(\d+)/i.exec(
+    u,
+  );
+  if (m) u = `https://www.douyin.com/video/${m[1]}`;
+  return u;
 }
 
 function escapeRegExp(s) {

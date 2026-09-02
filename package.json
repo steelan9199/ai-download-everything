@@ -10,6 +10,8 @@
   "scripts": {
     "start": "electron .",
     "selfcheck": "electron . --selfcheck",
+    "test:links": "node scripts/test-link-extractor.js",
+    "smoke:paste": "electron scripts/smoke-paste.js",
     "dist": "electron-builder --win"
   },
   "dependencies": {

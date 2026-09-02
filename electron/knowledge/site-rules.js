@@ -36,6 +36,26 @@ export const BUILTIN = [
     note: "爱奇艺：yt-dlp 不支持，浏览器引擎字节区间模式已内置支持",
     settings: { forceEngine: "browser" },
   },
+  {
+    // 抖音（含 v.douyin.com 短链、www.douyin.com/video/<id>）：
+    //  yt-dlp 必报 "Fresh cookies (not necessarily logged in) are needed"（退出码 1），
+    //  所以直接跳过 yt-dlp，省一轮无效尝试。
+    //  播放页是「画面流 media-video-* + 声音流 media-audio-*」两条独立签名直链（无 m3u8），
+    //  浏览器引擎抓到后自动走「探测 → 分流 → 下载 → ffmpeg 合成」。
+    //  两个已修的坑（2026-09-03 实战验证通过，13分29秒/1080p/hvc1 成功落盘）：
+    //   1) 直链必须走 Node 原生流式下载，不能走 Electron net.request：
+    //      net 带短链 Referer 会被 Chromium 判非法来源（Cancelling request ... invalid referrer），
+    //      且它 60s 全局超时必然打断大文件；
+    //   2) Referer 必须是 https://www.douyin.com/（短链域 v.douyin.com 无效），
+    //      Cookie 也要按落地页（短链 302 后的 www 域）取，短链域取不到。
+    //  详见 references/douyin-download-notes.md。
+    id: "douyin-av-split",
+    host: "douyin.com",
+    match: "douyin\\.com|iesdouyin\\.com",
+    kind: "settings",
+    note: "抖音：yt-dlp 需登录 Cookie 必败，浏览器引擎音视频双直链合成已内置支持（已验证）",
+    settings: { forceEngine: "browser" },
+  },
 ];
 
 export function rulesFile() {

@@ -5,7 +5,7 @@
  * 用 Electron 内嵌 Chromium 的真实指纹 + 持久化 profile 复用 Cookie（cf_clearance），
  * 拦截 .m3u8 与分片请求，拿 Cookie 后全速并发重拉分段，交给本地 ffmpeg 合并。
  */
-import { BrowserWindow, session } from "electron";
+import { BrowserWindow, session, net } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,31 @@ import * as hls from "../core/hls.js";
 import * as downloader from "../core/downloader.js";
 import * as http from "../core/http.js";
 import * as ffmpeg from "../core/ffmpeg.js";
+import { streamDownload } from "./kuaishou-engine.js";
+
+/**
+ * 短链域 → 站点主域。短链（v.douyin.com 等）当 Referer 会被判为非法来源，
+ * Chromium 直接 Cancelling request ... with invalid referrer，所以统一换成主域。
+ */
+const SHORT_LINK_MAIN = {
+  "v.douyin.com": "https://www.douyin.com/",
+  "v.kuaishou.com": "https://www.kuaishou.com/",
+  "chenzhongtech.com": "https://www.kuaishou.com/",
+};
+
+/** 把 Referer 归一成「站点主域 + /」（短链换成主域），非法值返回空串 */
+function normalizeReferer(u) {
+  if (!u) return "";
+  try {
+    const url = new URL(u);
+    for (const [host, main] of Object.entries(SHORT_LINK_MAIN)) {
+      if (url.host === host || url.host.endsWith("." + host)) return main;
+    }
+    return url.origin + "/";
+  } catch (_) {
+    return "";
+  }
+}
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -109,9 +134,21 @@ export class BrowserInterceptEngine {
         return;
       }
       seenMedia.add(details.url);
-      mediaCandidates.push({ url: details.url, type: ct, kind: ctKind(ct) });
+      mediaCandidates.push({
+        url: details.url,
+        type: ct,
+        // content-type 不可靠（抖音声音流也可能标 video/mp4），URL 里的
+        // media-audio / media-video 是更准的归类依据
+        kind: ctKind(ct) || mediaKindFromUrl(details.url),
+      });
       if (mediaCandidates.length === 1)
         this.onEvent({ type: "found-media", url: details.url });
+      this.onLog({
+        level: "info",
+        msg: `捕获媒体直链 ${mediaCandidates.length} 条（${
+          /media-audio|mime_type=audio/i.test(details.url) ? "声音" : "画面?"
+        }）`,
+      });
       cb({});
     };
     ses.webRequest.onHeadersReceived(filter, onHeaders);
@@ -172,6 +209,18 @@ export class BrowserInterceptEngine {
       ],
     });
 
+    // 抖音网页版常「静音自动播放」：浏览器自动播放策略下，声音流可能根本没发起请求，
+    // 导致只抓到画面流。用户刚才在页面上点过/拖过进度条（已产生用户手势），这里
+    // 强制取消静音，逼播放器把声音流也请求出来，再等几秒让网络拦截抓到。
+    if (state.choice === "playing" || state.choice === "done") {
+      await this.forceUnmute();
+      await sleep(5000);
+      this.onLog({
+        level: "info",
+        msg: `静音解除后共捕获媒体直链 ${mediaCandidates.length} 条`,
+      });
+    }
+
     // 拿到一个可用的 m3u8 优先；拿不到就引导人用手工喂链接（猫抓/F12）
     let m3u8Url = pickM3u8(m3u8List);
     if (!m3u8Url) {
@@ -189,7 +238,8 @@ export class BrowserInterceptEngine {
         mediaCandidates.push({
           url: m.url,
           type: m.type || "",
-          kind: m.kind || null,
+          kind: (m.kind === "video" || m.kind === "audio" ? m.kind : null)
+            || mediaKindFromUrl(m.url),
           pageDuration: m.duration && Number.isFinite(m.duration) ? m.duration : null,
           pageWidth: m.width || null,
           pageHeight: m.height || null,
@@ -270,8 +320,29 @@ export class BrowserInterceptEngine {
     }
   }
 
+  /** 强制页面里的 <video>/<audio> 取消静音并播放。
+   *  浏览器自动播放策略要求「先有用户手势」——用户在页面上点过/拖过进度条后即满足，
+   *  目的是逼抖音 DASH 播放器把「声音流」也请求出来（静音时它可能压根不请求）。 */
+  async forceUnmute() {
+    if (!this.viewWc || this.viewWc.isDestroyed()) return;
+    try {
+      await this.viewWc.executeJavaScript(
+        `(() => {
+          document.querySelectorAll('video,audio').forEach((el) => {
+            try {
+              el.muted = false;
+              el.volume = 1;
+              if (el.paused) el.play().catch(() => {});
+            } catch (_) {}
+          });
+        })()`,
+        true,
+      );
+    } catch (_) {}
+  }
+
   /** 从页面里正在播放的 <video>/<audio> 元素拿媒体地址（抖音等直链站用 currentSrc 指到 CDN）。
-   *  顺带取已加载的时长/分辨率，作为点选展示的一等数据（网页已解码，无需再探测）。 */
+   * 顺带取已加载的时长/分辨率，作为点选展示的一等数据（网页已解码，无需再探测）。 */
   async grabPageMedia() {
     if (!this.viewWc || this.viewWc.isDestroyed()) return [];
     try {
@@ -289,6 +360,15 @@ export class BrowserInterceptEngine {
               height: el.videoHeight || null,
             });
           });
+          // MSE 播放器的 <video>.currentSrc 是 blob: 地址，真实 CDN 直链从
+          // 资源计时记录里捞（画面流 media-video / 声音流 media-audio 都在）。
+          try {
+            performance.getEntriesByType('resource').forEach((e) => {
+              if (/douyinvod|media-audio|media-video|mime_type=(video|audio)|aweme\\/v1\\/play/i.test(e.name)) {
+                out.push({ url: e.name, kind: null, duration: null, width: null, height: null });
+              }
+            });
+          } catch (_) {}
           return out;
         })()`,
         true,
@@ -301,18 +381,122 @@ export class BrowserInterceptEngine {
     }
   }
 
-  /** 把一条直链下载到工作目录临时文件（后续交给 ffmpeg 合成），返回本地路径 */
-  async downloadToTemp(url, ext, ctx) {
-    const buf = await http.getBuffer(url, {
-      headers: this.buildHeaders(ctx, url),
-      timeoutMs: 120000,
-    });
+  /** 把一条直链流式下载到工作目录临时文件（后续交给 ffmpeg 合成），返回本地路径。
+   *  首选 Node 原生 fetch 流式下载：带 Range 续传 + 退避重试 + 无整体超时，
+   *  且不经过 Chromium 网络栈（避开「invalid referrer 直接取消请求」和 60s 全局超时）。
+   *  万一 Node 侧被拒（少数 CDN 认 TLS 指纹），再回退 Electron net（浏览器同栈）。 */
+  async downloadToTemp(url, ext, ctx, label = "媒体") {
     const file = path.join(
       this.workDir,
       `${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`,
     );
-    fs.writeFileSync(file, buf);
+    this.onEvent({ type: "status", msg: `正在下载${label}流……` });
+    const headers = this.buildHeaders(ctx, url);
+    try {
+      await streamDownload(url, file, {
+        headers,
+        isCancelled: () => this.isCancelled(),
+        onEvent: (p) => this.onEvent({ type: "progress", ...p }),
+      });
+      this.onLog({ level: "info", msg: `${label}流下载完成：${file}` });
+      return file;
+    } catch (e) {
+      this.onLog({
+        level: "warn",
+        msg: `${label}流 Node 下载失败（${e && e.message}），改用浏览器网络栈重试`,
+      });
+    }
+    await this.downloadViaNet(url, file + ".part", {
+      headers,
+      onProgress: (p) =>
+        this.onEvent({ type: "progress", percent: p.percent || 0 }),
+    });
+    fs.renameSync(file + ".part", file);
     return file;
+  }
+
+  /** Electron net 流式下载到 dest：自动跟随重定向；超时/4xx 明确报错，不装死 */
+  downloadViaNet(url, dest, { headers = {}, onProgress = () => {} } = {}) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const done = (fn, v) => {
+        if (!settled) {
+          settled = true;
+          fn(v);
+        }
+      };
+      let req;
+      try {
+        req = net.request({ url, partition: this.partition, redirect: "follow" });
+      } catch (e) {
+        return reject(e);
+      }
+      for (const [k, v] of Object.entries(headers)) {
+        try {
+          req.setHeader(k, String(v));
+        } catch (_) {}
+      }
+      const timer = setTimeout(() => {
+        try {
+          req.abort();
+        } catch (_) {}
+        done(
+          reject,
+          new Error("下载超时（网络卡住或被重置）：" + url.slice(0, 100)),
+        );
+      }, 60000);
+      const ws = fs.createWriteStream(dest);
+      ws.on("error", (e) => {
+        clearTimeout(timer);
+        done(reject, e);
+      });
+      req.on("response", (res) => {
+        if (res.statusCode >= 400) {
+          clearTimeout(timer);
+          try {
+            req.abort();
+          } catch (_) {}
+          try {
+            res.resume();
+          } catch (_) {}
+          return done(
+            reject,
+            new Error(
+              `HTTP ${res.statusCode}：直链可能已过期，回浏览器窗口把视频再播一下刷新签名后重试`,
+            ),
+          );
+        }
+        const total = Number(res.headers["content-length"] || 0) || 0;
+        let got = 0;
+        let lastTick = 0;
+        res.on("data", (chunk) => {
+          got += chunk.length;
+          const now = Date.now();
+          if (now - lastTick > 400) {
+            lastTick = now;
+            onProgress({ percent: total ? (got / total) * 100 : 0, loaded: got, total });
+          }
+        });
+        res.on("error", (e) => {
+          clearTimeout(timer);
+          done(reject, e);
+        });
+        res.pipe(ws);
+        ws.on("finish", () => {
+          clearTimeout(timer);
+          onProgress({ percent: 100, loaded: got, total });
+          done(resolve, { size: got });
+        });
+      });
+      req.on("error", (e) => {
+        clearTimeout(timer);
+        try {
+          ws.close();
+        } catch (_) {}
+        done(reject, e);
+      });
+      req.end();
+    });
   }
 
   /** 非 HLS 直链主流程：探测候选流的时长/分辨率/有无画面/有无声音 → 人工点选画面流 → 下载 → 合成 */
@@ -327,8 +511,15 @@ export class BrowserInterceptEngine {
       if (c.kind === "audio" || /^audio\//i.test(String(c.type || ""))) return false;
       return true; // 探测失败：默认当画面（单文件老站）
     });
+    // 声音流判定：探测确有声音轨最准；探测失败时，content-type / URL 里的
+    // media-audio 特征也算数（之前探测一失败声音流就被两边都丢弃，导致成品无声）
     const audioList = probed.filter(
-      (c) => c.hasAudio === true && c.hasVideo !== true,
+      (c) =>
+        c.hasVideo !== true &&
+        (c.hasAudio === true ||
+          c.kind === "audio" ||
+          /^audio\//i.test(String(c.type || "")) ||
+          /media-audio|mime_type=audio/i.test(c.url)),
     );
 
     const byDurDesc = (a, b) => (b.duration ?? -1) - (a.duration ?? -1);
@@ -355,6 +546,7 @@ export class BrowserInterceptEngine {
       chosen.url,
       extFromContentType(chosen.type) || extFromUrl(chosen.url) || ".mp4",
       ctx,
+      "画面",
     );
     this.onEvent({ type: "status", msg: "画面流已下载，正在处理声音……" });
 
@@ -362,13 +554,17 @@ export class BrowserInterceptEngine {
 
     const audio = audioList[0];
     if (!audio) {
-      this.onEvent({ type: "status", msg: "没抓到独立声音流，直接输出画面（可能无声音）" });
+      this.onEvent({
+        type: "status",
+        msg: "没抓到独立声音流，直接输出画面（可能无声音）。若要声音：回浏览器窗口让视频出声播放几秒后重试",
+      });
       return await this.publishDirect(vFile);
     }
     const aFile = await this.downloadToTemp(
       audio.url,
       extFromContentType(audio.type) || ".m4a",
       ctx,
+      "声音",
     );
     const outFile = path.join(this.downloadDir, `video_${Date.now()}.mp4`);
     this.onEvent({ type: "merge-start", file: outFile });
@@ -394,9 +590,12 @@ export class BrowserInterceptEngine {
       list.map(async (m) => {
         let info = { duration: null, width: null, height: null, hasAudio: false };
         if (this.ffmpegPath) {
-          const headerStr = Object.entries(this.buildHeaders(ctx, m.url))
-            .map(([k, v]) => `${k}: ${v}`)
-            .join("\r\n");
+          // ffmpeg 的 -headers 要求每个头都以 CRLF 结尾（包括最后一个），
+          // 缺结尾 CRLF 会让 Cookie 头与 ffmpeg 内置头粘连、被 CDN 判 403。
+          const headerStr =
+            Object.entries(this.buildHeaders(ctx, m.url))
+              .map(([k, v]) => `${k}: ${v}`)
+              .join("\r\n") + "\r\n";
           try {
             info = await ffmpeg.probeMedia(this.ffmpegPath, m.url, {
               headers: headerStr,
@@ -411,6 +610,12 @@ export class BrowserInterceptEngine {
           info.width = m.pageWidth;
           info.height = m.pageHeight;
         }
+        this.onLog({
+          level: "info",
+          msg: `候选流探测：${fmtDuration(info.duration)} · ${
+            info.width ? info.width + "x" + info.height : "分辨率未知"
+          } · 画面=${info.hasVideo ? "有" : "?"} 声音=${info.hasAudio ? "有" : "?"}`,
+        });
         return { ...m, ...info };
       }),
     );
@@ -436,11 +641,22 @@ export class BrowserInterceptEngine {
     return Number.isInteger(idx) && pics[idx] ? pics[idx] : pics[0];
   }
 
-  /** 收集站点会话上下文：Cookie（含 cf_clearance）+ UA + Referer，用于重发请求 */
+  /** 收集站点会话上下文：Cookie（含 cf_clearance）+ UA + Referer，用于重发请求
+   *  注意：Cookie 按域隔离，短链域（v.douyin.com）取不到 www 域的 Cookie，
+   *  所以优先用浏览器窗口当前真实地址（短链 302 之后的落地页）。 */
   async collectContext(pageUrl) {
+    let url = pageUrl;
+    try {
+      if (this.viewWc && !this.viewWc.isDestroyed()) {
+        const cur = this.viewWc.getURL();
+        if (cur && /^https?:/i.test(cur)) url = cur;
+      }
+    } catch (_) {
+      /* ignore */
+    }
     let cookies = "";
     try {
-      const list = await this.ses.cookies.get({ url: pageUrl });
+      const list = await this.ses.cookies.get({ url });
       cookies = list.map((c) => `${c.name}=${c.value}`).join("; ");
     } catch (_) {
       /* ignore */
@@ -449,7 +665,7 @@ export class BrowserInterceptEngine {
       this.viewWc && !this.viewWc.isDestroyed()
         ? this.viewWc.getUserAgent()
         : "";
-    return { cookies, ua, referer: pageUrl, extra: this.externalHeaders || {} };
+    return { cookies, ua, referer: normalizeReferer(url) || url, extra: this.externalHeaders || {} };
   }
 
   /** 组装重发请求的标准头 */
@@ -458,7 +674,7 @@ export class BrowserInterceptEngine {
       "User-Agent": ctx.ua || "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
       Accept: "*/*",
       "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-      Referer: ctx.referer || url,
+      Referer: normalizeReferer(ctx.referer) || url,
       ...(ctx.cookies ? { Cookie: ctx.cookies } : {}),
       ...(ctx.extra || {}),
     };
@@ -801,6 +1017,18 @@ function ctKind(ct) {
   return null;
 }
 
+/** URL 特征判断抖音 DASH 流是画面还是声音（content-type 不可靠时的依据）：
+ *  画面流路径含 media-video / 参数 mime_type=video；声音流含 media-audio / mime_type=audio */
+function mediaKindFromUrl(url) {
+  const s = String(url || "");
+  if (/media-audio|mime_type=audio|\/media-audio-/i.test(s)) return "audio";
+  if (
+    /media-video|mime_type=video|douyinvod|aweme\/v1\/play|video_id=/i.test(s)
+  )
+    return "video";
+  return null;
+}
+
 /** 响应是否可能是媒体直链（收集前的粗筛，避免把 JS/CSS 也塞进候选池） */
 function isLikelyMedia(url, ct) {
   if (ctKind(ct)) return true;
@@ -821,7 +1049,9 @@ function fmtDuration(sec) {
 
 /** 判断 URL 是否像媒体直链（配合 application/octet-stream 这种不写 video/ 的 CDN） */
 function looksLikeMediaUrl(url) {
-  return /aweme\/v1\/play|douyinvod|mime_type=video|video_id=/i.test(url);
+  return /aweme\/v1\/play|douyinvod|mime_type=(video|audio)|video_id=|media-(video|audio)/i.test(
+    url,
+  );
 }
 
 /** content-type → 文件后缀 */

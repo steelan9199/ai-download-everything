@@ -11,6 +11,7 @@ import * as settings from "./settings.js";
 import * as startupCheck from "./startup-check.js";
 import * as orchestrator from "./engines/orchestrator.js";
 import * as advisor from "./ai/advisor.js";
+import * as linkExtractor from "./core/link-extractor.js";
 
 export function register(getWin) {
   const state = { cancelToken: null, pendingQuestions: new Map(), seq: 0 };
@@ -58,6 +59,9 @@ export function register(getWin) {
     return r.canceled ? null : r.filePaths[0];
   });
 
+  // —— 粘贴净化：把分享文案洗净成网址（纯字符串处理，零网络、零 token）——
+  ipcMain.handle("links:extract", (_e, text) => linkExtractor.extractLinks(text));
+
   ipcMain.handle("ai:ask", async (_e, payload) => {
     const msg = payload && payload.message;
     const system = payload && payload.system;
@@ -100,8 +104,14 @@ export function register(getWin) {
       if (w && !w.isDestroyed()) w.webContents.send("event", ev);
     };
 
+    // 兜底净化：粘贴净化可能没走到（手动输入、Ctrl+Shift+V 等），下载前再洗一次。
+    // 只影响实际去下载的 URL，不改输入框内容。
+    const rawUrl = String(url).trim();
+    const cleanUrl = linkExtractor.pickFirstUrl(rawUrl);
+    if (cleanUrl !== rawUrl) onEvent({ type: "status", msg: "已从输入内容中提取网址" });
+
     const result = await orchestrator.download({
-      url,
+      url: cleanUrl,
       engine,
       settings: cfg,
       tools,

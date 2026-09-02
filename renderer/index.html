@@ -30,7 +30,14 @@
     <!-- 下载页 -->
     <main v-if="tab === 'home'">
       <div class="card">
-        <input v-model.trim="url" class="url-input" placeholder="粘贴视频网址，例如 https://www.youtube.com/watch?v=..." @keyup.enter="startDownload" />
+        <input
+          ref="urlInput"
+          v-model.trim="url"
+          class="url-input"
+          placeholder="粘贴视频网址，例如 https://www.youtube.com/watch?v=..."
+          @keyup.enter="startDownload"
+          @paste="onPaste"
+        />
         <div class="row">
           <select v-model="engine">
             <option value="auto">引擎：自动（推荐）</option>
@@ -100,6 +107,22 @@
         <div v-if="savedTip" class="muted">{{ savedTip }}</div>
       </div>
     </main>
+
+    <!-- 多链接候选：粘贴内容里识别出 2 个以上链接时，让人点一个（绝不替人猜） -->
+    <div v-if="linkPicker.open" class="modal" @click.self="closeLinkPicker">
+      <div class="modal-box lp-box">
+        <p class="q-prompt">这段内容里有 <b>{{ linkPicker.links.length }}</b> 个链接，点一个来下载：</p>
+        <div class="q-opts">
+          <button v-for="(l, i) in linkPicker.links" :key="i" class="q-opt lp-item" @click="chooseLink(l)">
+            <span class="lp-badge">{{ l.label }}</span>
+            <span class="lp-url">{{ l.url }}</span>
+          </button>
+        </div>
+        <div class="q-foot">
+          <button class="ghost q-min" @click="closeLinkPicker">取消（不改输入框）</button>
+        </div>
+      </div>
+    </div>
 
     <!-- 点选式问题弹窗：点击遮罩（弹框外部）= 暂时收起，方便先看日志；问题仍在等待回答 -->
     <div v-if="question && !questionMinimized" class="modal" @click.self="minimizeQuestion">

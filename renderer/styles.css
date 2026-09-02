@@ -100,3 +100,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .q-min { padding: 6px 10px; font-size: 12px; }
 .q-pending { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; background: var(--accent); color: #fff; padding: 9px 16px; border-radius: 999px; font-size: 13px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.35); }
 .q-pending:hover { filter: brightness(1.08); }
+
+/* 多链接候选弹层：站点标签 + 完整网址，方便人一眼挑对 */
+.lp-box { max-width: 560px; }
+.lp-item { display: block; line-height: 1.45; }
+.lp-badge { display: inline-block; background: var(--accent-2); color: #fff; border-radius: 6px; padding: 1px 7px; font-size: 12px; margin-right: 8px; white-space: nowrap; }
+.lp-url { font-family: Consolas, monospace; font-size: 12.5px; color: var(--muted); word-break: break-all; }
+.lp-item:hover .lp-url { color: var(--text); }
