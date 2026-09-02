@@ -34,7 +34,7 @@ ai-download-video/
 │   ├── settings.js             # 设置持久化
 │   ├── startup-check.js        # 启动自检（ffmpeg/yt-dlp/目录）
 │   ├── core/                   # hls.js downloader.js ffmpeg.js http.js
-│   ├── engines/                # ytdlp-engine.js browser-engine.js orchestrator.js
+│   ├── engines/                # ytdlp-engine.js browser-engine.js kuaishou-engine.js(快手适配器) orchestrator.js
 │   ├── knowledge/              # rules.js(错误码规则表) site-rules.js(站点规则库沉淀)
 │   └── ai/                     # advisor.js(大模型顾问) sandbox.js(受限沙箱)
 ├── renderer/                   # Vue3 极简界面（index.html / app.js / styles.css）
@@ -129,6 +129,7 @@ npm run selfcheck
 - **断点续传 / 失败重试 / 多线程 / >1GB**：按分片粒度续传、指数退避重试、并发下载、原子落盘。
 - **音视频分离（DASH）站点（抖音等）**：画面和声音是「两条独立流 + 一条短预览」。程序会对每条候选流探测时长/分辨率/有无画面/有无声音，多条画面时弹**「按时长从长到短」的点选**，选中后自动下载画面 + 声音交给 ffmpeg 合成完整视频。详见 [references/dash-audio-video-split.md](references/dash-audio-video-split.md)。
 - **网页弹「获取打开此链接的应用」系统弹窗**（抖音等字节系站点会跳 `bytedance://` 等深链唤起 App）：已在主进程 + 浏览器引擎两层静默拦截；遇到同类型弹窗先看 [references/block-external-protocol-popups.md](references/block-external-protocol-popups.md)。
+- **快手视频**（`v.kuaishou.com` 分享短链 / `www.kuaishou.com/short-video/<id>`）：yt-dlp 不支持该站，程序内置**快手适配器**（`engines/kuaishou-engine.js`）——短链跳到网页版后，页面 HTML 内嵌的 `__APOLLO_STATE__` 直接带 `photoUrl` 完整 mp4 直链（H.264，CDN 支持 Range、不强制 Cookie），纯 HTTP 解析后流式下载（进度/断点续传/重试，成品用视频文案命名），**不开浏览器、不花 token**；撞滑块/登录墙时自动弹内嵌浏览器，真人过验证后从页面 JS 上下文/网络拦截取回直链再下。快手 `kwai://` 等 App 深链弹窗同样静默拦截。图文/直播内容暂不支持。
 
 ---
 
@@ -176,30 +177,23 @@ node scripts/smoke-core.js
 
 ## 打包成 exe
 
-用 `electron-builder`（按需安装）：
+已配置好 `electron-builder`（devDependencies + `package.json` 的 `build` 字段：`win.target=portable`、`artifactName=AI视频下载器-v${version}.exe`、只打 `electron/**` `renderer/**` `site-rules/**`，生产依赖 vue 自动进 asar）。
+
+国内网络先设镜像再打包（避免拉 electron / nsis / winCodeSign 超时）：
 
 ```powershell
-npm i -D electron-builder
-```
-
-`package.json` 增加：
-
-```json
-{
-  "build": {
-    "appId": "com.personal.ai-video-downloader",
-    "win": { "target": "portable" },
-    "files": ["electron/**", "renderer/**", "site-rules/**", "package.json"]
-  },
-  "scripts": { "dist": "electron-builder --win" }
-}
-```
-
-```powershell
+$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
 npm run dist
 ```
 
-产物在 `dist/`。**注意**：`portable`/安装包里仍**不内置 ffmpeg / yt-dlp**，让用户在设置里指向本机已装的二进制。
+产物在 `dist/`：单文件绿色版 `AI视频下载器-vX.Y.Z.exe`（约 68MB，免安装）。打包后可跑 `.\dist\AI视频下载器-vX.Y.Z.exe --selfcheck` 冒烟（退出码 0 = 环境探测正常）。
+
+**分发注意**：
+
+- **不内置 ffmpeg / yt-dlp**：测试者首次使用需自行安装（winget 两条命令，或设置页手动浏览填路径），界面有横幅指引；发给别人时附上 `dist/使用说明（发给测试者）.txt`。
+- **未签名**：对方首次运行会遇 SmartScreen「Windows 已保护你的电脑」→「更多信息」→「仍要运行」；杀软可能误报。微信/QQ 直发 .exe 易被拦截，先压成 zip 或走网盘。
+- 绿色版设置/规则库仍存在 `%APPDATA%\ai-video-downloader`（换 exe 不丢配置）；快手适配器只依赖 Node 内置能力，但下载前置自检仍要求 ffmpeg + yt-dlp 就绪。
 
 ---
 
@@ -217,7 +211,7 @@ npm run dist
 
 ## 文档维护约定
 
-- 本文件超过 300 行就拆分：把深水专题内容挪到 `references/`，主文档只留概述 + 引用链接（现有：`block-external-protocol-popups.md`、`dash-audio-video-split.md`）。
+- 本文件超过 300 行就拆分：把深水专题内容挪到 `references/`，主文档只留概述 + 引用链接（现有：`block-external-protocol-popups.md`、`dash-audio-video-split.md`、`iqiyi-download-handoff.md` 爱奇艺下载排障交接）。
 
 ---
 

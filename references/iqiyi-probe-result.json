@@ -1,0 +1,99 @@
+{
+  "target": "https://sports.iqiyi.com/resource/pcw/play/giqcbm8h24",
+  "finalUrl": "https://sports.iqiyi.com/resource/pcw/play/giqcbm8h24",
+  "m3u8": [],
+  "segCount": 5,
+  "segSample": [
+    "https://pcw-data.video.iqiyi.com/videos/v1ts/20260902/73/61/8fda48425b6071a14b6b7b2793d8e589.ts?start=0&end=1237980&contentlength=1237980&sd=0&qd_idx=111AG&qd_rt=N5555535B515&qd_etd=2166132386578827777&qd_tvid=1548681443102000&qd_tvid=1548681443102000&qd_tc=4335325ae7f65cc8b4184e5b57d94cfec&qdv=3&qd_uid=0&qd_vip=0&qd_vipres=0&qd_did=56e24051194c24d5ed8fff9043f822af&qd_src=01010031010000000000&qd_tm=1788360943865&qd_p=76492947&qd_k=a5bf82c6febee6a18d312b6825f87e24&qd_index=vod&qd_sc=6919ea4b017307a60d30029d504cff46&bid=500&fr=25&qyid=56e24051194c24d5ed8fff9043f822af&vcodec=2&cpt=0&cid=17&pv=0.1&cross-domain=1&mss=1&stauto=1",
+    "https://bscdncnc.inter.71edge.com/videos/v1ts/20260902/73/61/8fda48425b6071a14b6b7b2793d8e589.ts?key=0556c5acd68a90cf47867b05563e6bd90&dis_k=5c1f66970184509aabde06ddadc002bc&dis_t=1788360944&dis_dz=CNC-Shan1Xi&dis_st=180&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&qdpv=3&uuid=76492947-1a0629e6c4b-410&hotlevel=27&qd_uid=0&mss=1&qd_rt=N5555535B515&end=1238016&qd_etd=2166132386578827777&fr=25&vcodec=2&qd_vip=0&qd_tc=4335325ae7f65cc8b4184e5b57d94cfec&pv=0.1&sd=0&qd_tm=1788360943865&cpt=0&cross-domain=1&qd_k=a5bf82c6febee6a18d312b6825f87e24&qd_tvid=1548681443102000&qd_sc=6919ea4b017307a60d30029d504cff46&contentlength=1238016&start=0&qd_p=76492947&qyid=56e24051194c24d5ed8fff9043f822af&cid=17&bid=500&qd_index=vod&qd_src=01010031010000000000&qd_idx=111AG&stauto=1&qd_vipres=0&qd_did=56e24051194c24d5ed8fff9043f822af&cphc=arta&ori=pcw1&num=1788360944532",
+    "https://bscdncnc.inter.71edge.com/videos/v1ts/20260902/73/61/8fda48425b6071a14b6b7b2793d8e589.ts?key=0556c5acd68a90cf47867b05563e6bd90&dis_k=5c1f66970184509aabde06ddadc002bc&dis_t=1788360944&dis_dz=CNC-Shan1Xi&dis_st=180&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&qdpv=3&uuid=76492947-1a0629e6c4b-410&hotlevel=27&qd_uid=0&mss=1&qd_rt=N5555535B515&end=14314496&qd_etd=2166132386578827777&fr=25&vcodec=2&qd_vip=0&qd_tc=4335325ae7f65cc8b4184e5b57d94cfec&pv=0.1&sd=0&qd_tm=1788360943865&cpt=0&cross-domain=1&qd_k=a5bf82c6febee6a18d312b6825f87e24&qd_tvid=1548681443102000&qd_sc=6919ea4b017307a60d30029d504cff46&contentlength=13076480&start=1238016&qd_p=76492947&qyid=56e24051194c24d5ed8fff9043f822af&cid=17&bid=500&qd_index=vod&qd_src=01010031010000000000&qd_idx=111AG&stauto=1&qd_vipres=0&qd_did=56e24051194c24d5ed8fff9043f822af&cphc=arta&ori=pcw1&num=1788360944697",
+    "https://bscdncnc.inter.71edge.com/videos/v1ts/20260902/73/61/8fda48425b6071a14b6b7b2793d8e589.ts?key=0556c5acd68a90cf47867b05563e6bd90&dis_k=5c1f66970184509aabde06ddadc002bc&dis_t=1788360944&dis_dz=CNC-Shan1Xi&dis_st=180&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&qdpv=3&uuid=76492947-1a0629e6c4b-410&hotlevel=27&qd_uid=0&mss=1&qd_rt=N5555535B515&end=27334656&qd_etd=2166132386578827777&fr=25&vcodec=2&qd_vip=0&qd_tc=4335325ae7f65cc8b4184e5b57d94cfec&pv=0.1&sd=0&qd_tm=1788360943865&cpt=0&cross-domain=1&qd_k=a5bf82c6febee6a18d312b6825f87e24&qd_tvid=1548681443102000&qd_sc=6919ea4b017307a60d30029d504cff46&contentlength=13020160&start=14314496&qd_p=76492947&qyid=56e24051194c24d5ed8fff9043f822af&cid=17&bid=500&qd_index=vod&qd_src=01010031010000000000&qd_idx=111AG&stauto=1&qd_vipres=0&qd_did=56e24051194c24d5ed8fff9043f822af&cphc=arta&ori=pcw1&num=1788360945242",
+    "https://bscdncnc.inter.71edge.com/videos/v1ts/20260902/73/61/8fda48425b6071a14b6b7b2793d8e589.ts?key=0556c5acd68a90cf47867b05563e6bd90&dis_k=5c1f66970184509aabde06ddadc002bc&dis_t=1788360944&dis_dz=CNC-Shan1Xi&dis_st=180&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&qdpv=3&uuid=76492947-1a0629e6c4b-410&hotlevel=27&qd_uid=0&mss=1&qd_rt=N5555535B515&end=35715864&qd_etd=2166132386578827777&fr=25&vcodec=2&qd_vip=0&qd_tc=4335325ae7f65cc8b4184e5b57d94cfec&pv=0.1&sd=0&qd_tm=1788360943865&cpt=0&cross-domain=1&qd_k=a5bf82c6febee6a18d312b6825f87e24&qd_tvid=1548681443102000&qd_sc=6919ea4b017307a60d30029d504cff46&contentlength=8381208&start=27334656&qd_p=76492947&qyid=56e24051194c24d5ed8fff9043f822af&cid=17&bid=500&qd_index=vod&qd_src=01010031010000000000&qd_idx=111AG&stauto=1&qd_vipres=0&qd_did=56e24051194c24d5ed8fff9043f822af&cphc=arta&ori=pcw1&num=1788360945659"
+  ],
+  "media": [
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260205/35/86/9c26ed5dd21f07406c3224edbb6c0282.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6a19-413&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=0-9000",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260205/35/86/9c26ed5dd21f07406c3224edbb6c0282.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6a19-413&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=809-516894",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260205/35/86/9c26ed5dd21f07406c3224edbb6c0282.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6a19-413&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=516894-808382",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://bscdncnc.inter.71edge.com/videos/v1ts/20260902/73/61/8fda48425b6071a14b6b7b2793d8e589.ts?key=0556c5acd68a90cf47867b05563e6bd90&dis_k=5c1f66970184509aabde06ddadc002bc&dis_t=1788360944&dis_dz=CNC-Shan1Xi&dis_st=180&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&qdpv=3&uuid=76492947-1a0629e6c4b-410&hotlevel=27&qd_uid=0&mss=1&qd_rt=N5555535B515&end=1238016&qd_etd=2166132386578827777&fr=25&vcodec=2&qd_vip=0&qd_tc=4335325ae7f65cc8b4184e5b57d94cfec&pv=0.1&sd=0&qd_tm=1788360943865&cpt=0&cross-domain=1&qd_k=a5bf82c6febee6a18d312b6825f87e24&qd_tvid=1548681443102000&qd_sc=6919ea4b017307a60d30029d504cff46&contentlength=1238016&start=0&qd_p=76492947&qyid=56e24051194c24d5ed8fff9043f822af&cid=17&bid=500&qd_index=vod&qd_src=01010031010000000000&qd_idx=111AG&stauto=1&qd_vipres=0&qd_did=56e24051194c24d5ed8fff9043f822af&cphc=arta&ori=pcw1&num=1788360944532",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=0-9000",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://bscdncnc.inter.71edge.com/videos/v1ts/20260902/73/61/8fda48425b6071a14b6b7b2793d8e589.ts?key=0556c5acd68a90cf47867b05563e6bd90&dis_k=5c1f66970184509aabde06ddadc002bc&dis_t=1788360944&dis_dz=CNC-Shan1Xi&dis_st=180&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&qdpv=3&uuid=76492947-1a0629e6c4b-410&hotlevel=27&qd_uid=0&mss=1&qd_rt=N5555535B515&end=14314496&qd_etd=2166132386578827777&fr=25&vcodec=2&qd_vip=0&qd_tc=4335325ae7f65cc8b4184e5b57d94cfec&pv=0.1&sd=0&qd_tm=1788360943865&cpt=0&cross-domain=1&qd_k=a5bf82c6febee6a18d312b6825f87e24&qd_tvid=1548681443102000&qd_sc=6919ea4b017307a60d30029d504cff46&contentlength=13076480&start=1238016&qd_p=76492947&qyid=56e24051194c24d5ed8fff9043f822af&cid=17&bid=500&qd_index=vod&qd_src=01010031010000000000&qd_idx=111AG&stauto=1&qd_vipres=0&qd_did=56e24051194c24d5ed8fff9043f822af&cphc=arta&ori=pcw1&num=1788360944697",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=1061-203307",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=203307-299030",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=299030-377720",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=377720-1097038",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=1097038-1907766",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://bscdncnc.inter.71edge.com/videos/v1ts/20260902/73/61/8fda48425b6071a14b6b7b2793d8e589.ts?key=0556c5acd68a90cf47867b05563e6bd90&dis_k=5c1f66970184509aabde06ddadc002bc&dis_t=1788360944&dis_dz=CNC-Shan1Xi&dis_st=180&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&qdpv=3&uuid=76492947-1a0629e6c4b-410&hotlevel=27&qd_uid=0&mss=1&qd_rt=N5555535B515&end=27334656&qd_etd=2166132386578827777&fr=25&vcodec=2&qd_vip=0&qd_tc=4335325ae7f65cc8b4184e5b57d94cfec&pv=0.1&sd=0&qd_tm=1788360943865&cpt=0&cross-domain=1&qd_k=a5bf82c6febee6a18d312b6825f87e24&qd_tvid=1548681443102000&qd_sc=6919ea4b017307a60d30029d504cff46&contentlength=13020160&start=14314496&qd_p=76492947&qyid=56e24051194c24d5ed8fff9043f822af&cid=17&bid=500&qd_index=vod&qd_src=01010031010000000000&qd_idx=111AG&stauto=1&qd_vipres=0&qd_did=56e24051194c24d5ed8fff9043f822af&cphc=arta&ori=pcw1&num=1788360945242",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=1907766-2673665",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=2673665-3528161",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=3528161-4930036",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=4930036-5482429",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=5482429-6105676",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://bscdncnc.inter.71edge.com/videos/v1ts/20260902/73/61/8fda48425b6071a14b6b7b2793d8e589.ts?key=0556c5acd68a90cf47867b05563e6bd90&dis_k=5c1f66970184509aabde06ddadc002bc&dis_t=1788360944&dis_dz=CNC-Shan1Xi&dis_st=180&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&qdpv=3&uuid=76492947-1a0629e6c4b-410&hotlevel=27&qd_uid=0&mss=1&qd_rt=N5555535B515&end=35715864&qd_etd=2166132386578827777&fr=25&vcodec=2&qd_vip=0&qd_tc=4335325ae7f65cc8b4184e5b57d94cfec&pv=0.1&sd=0&qd_tm=1788360943865&cpt=0&cross-domain=1&qd_k=a5bf82c6febee6a18d312b6825f87e24&qd_tvid=1548681443102000&qd_sc=6919ea4b017307a60d30029d504cff46&contentlength=8381208&start=27334656&qd_p=76492947&qyid=56e24051194c24d5ed8fff9043f822af&cid=17&bid=500&qd_index=vod&qd_src=01010031010000000000&qd_idx=111AG&stauto=1&qd_vipres=0&qd_did=56e24051194c24d5ed8fff9043f822af&cphc=arta&ori=pcw1&num=1788360945659",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=6105676-7027520",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=7027520-7644672",
+      "ct": "application/octet-stream"
+    },
+    {
+      "url": "https://alicoccdncnc-hb.inter.71edge.com/videos/other/20260818/0b/35/a9d0555e6b821bd76a8b82d02fcf73f2.f4v?dis_dz=CNC-Shan1Xi&dis_st=46&qdv=3&src=iqiyi.com&dis_hit=0&dis_tag=01010000&random=1&rand_hash=0&uuid=76492947-1a0629e6c4d-3ec&cross-domain=1&qd_tvid=&qd_p=&qd_did=&qd_tm=1788360944000&pv=0.1&qd_index=&qd_src=&qd_vip=&qd_uid=&qd_k=&qd_vipres=&cphc=arta&range=7644672-7682395",
+      "ct": "application/octet-stream"
+    }
+  ]
+}

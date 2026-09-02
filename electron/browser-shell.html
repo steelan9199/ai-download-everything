@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>浏览</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    display: flex; flex-direction: column;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: #f3f4f6;
+  }
+  #toolbar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 10px;
+    background: #ffffff;
+    border-bottom: 1px solid #d9dee5;
+    flex: 0 0 auto;
+  }
+  #toolbar button {
+    width: 32px; height: 28px;
+    border: 1px solid #d9dee5; background: #fff; color: #333;
+    border-radius: 6px; cursor: pointer; font-size: 15px; line-height: 1;
+  }
+  #toolbar button:hover { background: #f0f3f7; }
+  #toolbar button:disabled { color: #c0c4ca; cursor: default; background: #fafafa; }
+  #addr {
+    flex: 1 1 auto; height: 28px;
+    border: 1px solid #d9dee5; border-radius: 6px;
+    padding: 0 10px; font-size: 13px; color: #222; outline: none;
+  }
+  #addr:focus { border-color: #4f8cff; }
+  webview { flex: 1 1 auto; background: #fff; }
+</style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="back" title="后退">&#8592;</button>
+    <button id="forward" title="前进">&#8594;</button>
+    <button id="reload" title="刷新">&#8635;</button>
+    <input id="addr" type="text" spellcheck="false" placeholder="输入或修改网址，回车打开" />
+  </div>
+  <webview id="view"></webview>
+  <script>
+    (function () {
+      var view = document.getElementById('view');
+      var addr = document.getElementById('addr');
+      var back = document.getElementById('back');
+      var forward = document.getElementById('forward');
+      var reload = document.getElementById('reload');
+
+      var params = new URLSearchParams(location.search);
+      var initial = (params.get('url') || '').trim();
+      var partition = params.get('partition') || 'persist:download-browser';
+
+      // 与主进程共用同一个分区，保证 Cookie（cf_clearance）复用 + 网络拦截都照旧生效
+      view.setAttribute('partition', partition);
+
+      function sync() {
+        try {
+          var u = view.getURL();
+          if (u) addr.value = u;
+          back.disabled = !view.canGoBack();
+          forward.disabled = !view.canGoForward();
+        } catch (e) {}
+      }
+
+      function go(input) {
+        var u = (input || addr.value || '').trim();
+        if (!u) return;
+        if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+        addr.value = u;
+        try { view.loadURL(u); } catch (e) {}
+      }
+
+      addr.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { go(); addr.blur(); }
+      });
+      back.addEventListener('click', function () {
+        try { if (view.canGoBack()) view.goBack(); } catch (e) {}
+      });
+      forward.addEventListener('click', function () {
+        try { if (view.canGoForward()) view.goForward(); } catch (e) {}
+      });
+      reload.addEventListener('click', function () {
+        try { view.reload(); } catch (e) {}
+      });
+
+      view.addEventListener('did-navigate', sync);
+      view.addEventListener('did-navigate-in-page', sync);
+      view.addEventListener('did-stop-loading', sync);
+      view.addEventListener('dom-ready', function () {
+        try { view.focus(); } catch (e) {}
+      });
+
+      if (initial) {
+        if (!/^https?:\/\//i.test(initial)) initial = 'https://' + initial;
+        addr.value = initial;
+        view.src = initial;
+      } else {
+        view.focus();
+      }
+    })();
+  </script>
+</body>
+</html>

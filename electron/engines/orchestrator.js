@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import * as ytdlpEngine from "./ytdlp-engine.js";
 import { BrowserInterceptEngine } from "./browser-engine.js";
+import * as kuaishou from "./kuaishou-engine.js";
 import * as rules from "../knowledge/rules.js";
 import * as siteRules from "../knowledge/site-rules.js";
 import * as advisor from "../ai/advisor.js";
@@ -53,6 +54,51 @@ export async function download(opts) {
       isSavedRule: true,
     });
   }
+  // settings 类规则：指定强制引擎（如爱奇艺 yt-dlp 必败，直接浏览器拦截，省一次无效尝试）
+  if (
+    rule &&
+    rule.kind === "settings" &&
+    rule.settings &&
+    rule.settings.forceEngine === "browser" &&
+    engine !== "ytdlp" // 用户显式手选 yt-dlp 时尊重选择
+  ) {
+    onEvent({
+      type: "status",
+      msg: `命中站点规则库：${rule.note || rule.host || "已知站点"}，直接用浏览器拦截引擎`,
+    });
+    return tryBrowser(url, opts, []);
+  }
+
+  // ①.5 内置站点适配器：快手（yt-dlp 不支持该站）。
+  // 网页 HTML 里内嵌 __APOLLO_STATE__ 带 mp4 直链，纯 HTTP 解析即可下载；
+  // 撞滑块/登录墙时适配器自己会弹内嵌浏览器兜底，再失败才转通用浏览器拦截。
+  if (kuaishou.match(url) && engine !== "ytdlp") {
+    onEvent({
+      type: "status",
+      msg: "命中快手适配器：解析网页直链直接下载（不调大模型）……",
+    });
+    try {
+      const out = await kuaishou.download({
+        url,
+        settings,
+        tools,
+        askUser,
+        onEvent,
+        onLog,
+        cancelToken: opts.cancelToken,
+      });
+      return { ok: true, output: out, engineUsed: "kuaishou" };
+    } catch (e) {
+      const msg = String((e && e.message) || e);
+      onLog({
+        level: "error",
+        msg: "快手适配器没成功：" + msg + " —— 转浏览器拦截引擎重试",
+      });
+      if (engine === "browser" || engine === "auto")
+        return tryBrowser(url, opts, ["NO_FORMATS"]);
+      return { ok: false, error: "快手下载失败：" + msg };
+    }
+  }
 
   const useYtdlp = engine === "auto" || engine === "ytdlp";
   const useBrowser = engine === "auto" || engine === "browser";
@@ -88,6 +134,10 @@ export async function download(opts) {
 /** ② 浏览器拦截引擎 */
 async function tryBrowser(url, opts, hint) {
   const { settings, tools, askUser, onEvent, onLog } = opts;
+  onEvent({
+    type: "status",
+    msg: "yt-dlp 没搞定，自动切换「浏览器拦截」引擎（马上会弹出内置浏览器窗口）……",
+  });
   const eng = new BrowserInterceptEngine({
     partition: "persist:download-browser",
     downloadDir: settings.downloadDir,

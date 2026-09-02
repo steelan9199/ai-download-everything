@@ -31,6 +31,7 @@ createApp({
       check: null,
       settings: { downloadDir: '', ffmpegPath: '', ytdlpPath: '', ai: { apiKey: '', baseURL: '', model: '', autoCall: false }, fullAccess: false },
       question: null,
+      questionMinimized: false,
       customAnswer: ''
     };
   },
@@ -129,13 +130,22 @@ createApp({
     },
     onQuestion(q) {
       this.question = q;
+      this.questionMinimized = false;
       this.customAnswer = '';
     },
     answer(choice) {
       const q = this.question;
       const custom = this.customAnswer || '';
       this.question = null;
+      this.questionMinimized = false;
       window.api.answerQuestion({ questionId: q.questionId, choice, custom });
+    },
+    minimizeQuestion() {
+      // 只是视觉收起：后端仍在等待该问题的答案，流程保持暂停
+      this.questionMinimized = true;
+    },
+    restoreQuestion() {
+      this.questionMinimized = false;
     },
     pushLog(s) {
       this.logs.push(s);

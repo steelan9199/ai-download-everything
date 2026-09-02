@@ -21,6 +21,7 @@
   },
   "build": {
     "appId": "com.personal.ai-video-downloader",
+    "artifactName": "AI视频下载器-v${version}.${ext}",
     "win": {
       "target": "portable"
     },

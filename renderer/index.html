@@ -101,15 +101,23 @@
       </div>
     </main>
 
-    <!-- 点选式问题弹窗 -->
-    <div v-if="question" class="modal">
+    <!-- 点选式问题弹窗：点击遮罩（弹框外部）= 暂时收起，方便先看日志；问题仍在等待回答 -->
+    <div v-if="question && !questionMinimized" class="modal" @click.self="minimizeQuestion">
       <div class="modal-box">
         <p class="q-prompt">{{ question.prompt }}</p>
         <div class="q-opts">
           <button v-for="o in question.options" :key="o.value" class="q-opt" @click="answer(o.value)">{{ o.label }}</button>
         </div>
         <textarea v-model="customAnswer" class="q-custom" placeholder="其他 / 用大白话补充一两句（可选）"></textarea>
+        <div class="q-foot">
+          <button class="ghost q-min" @click="minimizeQuestion">收起（先看日志，点底部浮条可召回）</button>
+        </div>
       </div>
+    </div>
+
+    <!-- 收起后的待答问题浮条 -->
+    <div v-if="question && questionMinimized" class="q-pending" @click="restoreQuestion">
+      ⚠ 有 1 个问题待回答（点击召回）
     </div>
   </div>
 

@@ -22,6 +22,20 @@ export const BUILTIN = [
     note: "示例：某站 m3u8 需要自定义 Referer 才能 200",
     settings: { referer: "https://example.com/", extraHeaders: {} },
   },
+  {
+    // 爱奇艺（sports.iqiyi.com 短视频/分享页，含 qy.net 短链）：
+    // yt-dlp 对播放页必报 "Can't find any video"，直接走浏览器拦截。
+    // 播放器用 MSE 把同一个 .ts 按 start/end 字节区间拉取（无 m3u8），
+    // 浏览器引擎自动识别 /videos/v1ts/ 走「字节区间原始字节拼接 → remux mp4」，
+    // 广告（/videos/other/、.f4v、qd_tvid 空）与调度接口（pcw-data，返回 JSON）自动剔除。
+    // 详见 references/iqiyi-download-handoff.md（已解决）。
+    id: "iqiyi-byte-range-ts",
+    host: "iqiyi.com",
+    match: "iqiyi\\.com|qy\\.net",
+    kind: "settings",
+    note: "爱奇艺：yt-dlp 不支持，浏览器引擎字节区间模式已内置支持",
+    settings: { forceEngine: "browser" },
+  },
 ];
 
 export function rulesFile() {

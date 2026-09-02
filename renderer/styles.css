@@ -96,3 +96,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .q-opt { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); text-align: left; padding: 11px 14px; }
 .q-opt:hover { border-color: var(--accent); }
 .q-custom { min-height: 60px; resize: vertical; }
+.q-foot { margin-top: 10px; text-align: right; }
+.q-min { padding: 6px 10px; font-size: 12px; }
+.q-pending { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; background: var(--accent); color: #fff; padding: 9px 16px; border-radius: 999px; font-size: 13px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.35); }
+.q-pending:hover { filter: brightness(1.08); }

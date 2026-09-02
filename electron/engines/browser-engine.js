@@ -8,6 +8,7 @@
 import { BrowserWindow, session } from "electron";
 import path from "node:path";
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import * as hls from "../core/hls.js";
 import * as downloader from "../core/downloader.js";
 import * as http from "../core/http.js";
@@ -53,9 +54,9 @@ export class BrowserInterceptEngine {
 
     const ses = session.fromPartition(this.partition);
     this.ses = ses;
-    // 抖音/字节系「打开 App」深链用自定义协议（bytedance: 等）。把这些 scheme 注册成空处理器，
-    // 在导航层之前就被吞掉，Windows 就不会再弹「获取打开此链接的应用」。
-    for (const scheme of ["bytedance", "snssdk1128", "snssdk"]) {
+    // 抖音/字节系「打开 App」深链用自定义协议（bytedance: 等），快手是 kwai:/kuaishou:。
+    // 把这些 scheme 注册成空处理器，在导航层之前就被吞掉，Windows 就不会再弹「获取打开此链接的应用」。
+    for (const scheme of ["bytedance", "snssdk1128", "snssdk", "kwai", "kuaishou", "kwainebula"]) {
       try {
         ses.protocol.handle(scheme, () => new Response(null, { status: 204 }));
       } catch (_) {
@@ -70,9 +71,24 @@ export class BrowserInterceptEngine {
           this.onEvent({ type: "found-m3u8", url: details.url });
         }
       } else if (/\.(ts|m4s|mp4|key)(\?.*)?$/i.test(details.url)) {
+        // 爱奇艺调度接口（pcw-data.video.iqiyi.com）返回的是 JSON 节点列表，不是媒体分片
+        if (isIqiyiScheduler(details.url)) {
+          cb({});
+          return;
+        }
+        // 爱奇艺广告分片（/videos/other/、.f4v、qd_tvid 为空）丢弃，只留正片
+        if (isIqiyiAd(details.url)) {
+          cb({});
+          return;
+        }
         if (!seenSeg.has(details.url)) {
           seenSeg.add(details.url);
           segUrls.push(details.url);
+          if (segUrls.length === 1 || segUrls.length % 10 === 0)
+            this.onLog({
+              level: "info",
+              msg: `已捕获正片分片 ${segUrls.length} 个`,
+            });
         }
       }
       cb({});
@@ -100,28 +116,55 @@ export class BrowserInterceptEngine {
     };
     ses.webRequest.onHeadersReceived(filter, onHeaders);
 
-    // 打开可见窗口，让真人能看画面、点播放、过验证码/成人确认
+    // 打开可见窗口：加载带「地址栏」的浏览壳，页面本体放进同分区的 <webview>。
+    // 这样既能显示/修改当前网址（像正常浏览器），又不丢 Cookie 复用与网络拦截。
     const win = new BrowserWindow({
       width: 1200,
       height: 820,
       webPreferences: {
-        partition: this.partition,
         contextIsolation: true,
         nodeIntegration: false,
+        webviewTag: true,
       },
     });
     this.win = win;
-    win.loadURL(url);
+
+    // 记录 <webview> 的 guest webContents：自动点播放 / 抓页面媒体都作用在它上面
+    this.viewWc = null;
+    win.webContents.on("did-attach-webview", (_e, webContents) => {
+      this.viewWc = webContents;
+    });
+
+    const shellFile = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "..",
+      "browser-shell.html",
+    );
+    await win.loadFile(shellFile, { query: { url, partition: this.partition } });
+
+    // 等 webview attach 就绪（通常瞬间完成）
+    for (let i = 0; i < 100 && !this.viewWc; i++) await sleep(100);
 
     await sleep(2500); // 让页面与 Cloudflare 挑战先跑一段
     await this.tryAutoPlay(); // 尽力自动点播放，失败不阻塞
+    this.onEvent({
+      type: "status",
+      msg: "内置浏览器窗口已打开：请确认正片在播放；分片没抓全时，把进度条从头拖到尾拖一遍",
+    });
 
     // 问人一眼：视频播了吗？（这就是「人工的眼睛」，一次点选搞定）
+    this.onLog({
+      level: "info",
+      msg: `等待你确认播放状态（目前已捕获 m3u8=${m3u8List.length} 个、正片分片=${segUrls.length} 个）`,
+    });
     const state = await this.askUser({
       id: "play-state",
-      prompt: "请看一眼刚弹出的浏览器窗口：视频现在是什么情况？",
+      prompt:
+        "请看一眼刚弹出的浏览器窗口：视频现在是什么情况？\n\n" +
+        "⚠ 重要：如果视频正在播，【先别点任何选项】。到浏览器窗口里把进度条从最开头拖到最末尾、慢慢拖一遍（每个位置停 1~2 秒），" +
+        "逼播放器把全片分片都请求出来；同时看主窗口日志里「已捕获正片分片 N 个」，等数字不再增长后，再回来点「已经在播放了」。",
       options: [
-        { value: "playing", label: "已经在播放了" },
+        { value: "playing", label: "已经在播放了（我已拖完进度条、分片抓全）" },
         { value: "buffering", label: "页面开了但在转圈/加载" },
         { value: "error", label: "报错/黑屏/打不开" },
         { value: "captcha", label: "弹了验证码/登录/成人确认" },
@@ -181,20 +224,23 @@ export class BrowserInterceptEngine {
     }
 
     const ctx = await this.collectContext(url);
+    // 页面 <video> 时长：校验边播边存拼出的整片是否完整（不全就提示拖进度条，而不是产出残片）
+    const pageDuration = await this.getPageDuration();
 
     if (m3u8Url) {
       // 主路径：全速抓取（破解会话参数直接拉分段）
       const segFiles = await this.grabPlaylist(m3u8Url, ctx);
       if (!segFiles || segFiles.length === 0)
-        return this.fallbackEdgePlay(segUrls, ctx);
+        return this.fallbackEdgePlay(segUrls, ctx, pageDuration);
       return await this.merge(segFiles.filter(Boolean));
     }
     // 没 m3u8 就走边播边存
-    return await this.fallbackEdgePlay(segUrls, ctx);
+    return await this.fallbackEdgePlay(segUrls, ctx, pageDuration);
   }
 
   /** 尽力自动点播放：找常见播放按钮 selector，点不到就算了（真人可补） */
   async tryAutoPlay() {
+    if (!this.viewWc || this.viewWc.isDestroyed()) return;
     const selectors = [
       "video",
       'button[class*="play"]',
@@ -206,7 +252,7 @@ export class BrowserInterceptEngine {
     ];
     for (const sel of selectors) {
       try {
-        const clicked = await this.win.webContents.executeJavaScript(
+        const clicked = await this.viewWc.executeJavaScript(
           `(() => {
           const el = document.querySelector(${JSON.stringify(sel)});
           if (el) { el.click(); return true; } else { const v = document.querySelector('video'); if (v && v.paused) { v.play(); return true; } }
@@ -227,9 +273,9 @@ export class BrowserInterceptEngine {
   /** 从页面里正在播放的 <video>/<audio> 元素拿媒体地址（抖音等直链站用 currentSrc 指到 CDN）。
    *  顺带取已加载的时长/分辨率，作为点选展示的一等数据（网页已解码，无需再探测）。 */
   async grabPageMedia() {
-    if (!this.win || this.win.isDestroyed()) return [];
+    if (!this.viewWc || this.viewWc.isDestroyed()) return [];
     try {
-      const items = await this.win.webContents.executeJavaScript(
+      const items = await this.viewWc.executeJavaScript(
         `(() => {
           const out = [];
           document.querySelectorAll('video,audio').forEach((el) => {
@@ -399,7 +445,10 @@ export class BrowserInterceptEngine {
     } catch (_) {
       /* ignore */
     }
-    const ua = this.win ? this.win.webContents.getUserAgent() : "";
+    const ua =
+      this.viewWc && !this.viewWc.isDestroyed()
+        ? this.viewWc.getUserAgent()
+        : "";
     return { cookies, ua, referer: pageUrl, extra: this.externalHeaders || {} };
   }
 
@@ -519,23 +568,161 @@ export class BrowserInterceptEngine {
   }
 
   /** 兜底：边播边存 —— 把浏览器实际请求过的分片 URL 拿去重拉（通常与直连等价，走 Cookie） */
-  async fallbackEdgePlay(segUrls, ctx) {
+  async fallbackEdgePlay(segUrls, ctx, expectedDuration = null) {
     if (segUrls.length === 0)
       throw new Error("既没抓到 m3u8 也没有分片，请检查视频是否在播放");
-    this.onEvent({ type: "edge-play", count: segUrls.length });
-    const jobs = segUrls.map((u, i) => ({
+    // 爱奇艺：所有「分片」是同一个 .ts 文件的字节区间（/videos/v1ts/ 路径 + start/end 参数），
+    // 必须原始字节拼接成整片再转封装，不能走 m3u8/concat 分离器（区间中段不是独立可解文件）。
+    if (segUrls.some((u) => /\/videos\/v1ts\//.test(String(u))))
+      return this.iqiyiByteRangeMerge(segUrls, ctx, expectedDuration);
+
+    // 爱奇艺分片 URL 自带 start 字节偏移：必须按 start 排序，捕获顺序不等于播放顺序
+    const startOf = (u) => {
+      const m = /[?&]start=(\d+)/.exec(String(u));
+      return m ? Number(m[1]) : NaN;
+    };
+    const ordered = [...segUrls].sort((a, b) => {
+      const sa = startOf(a);
+      const sb = startOf(b);
+      if (Number.isNaN(sa) && Number.isNaN(sb)) return 0;
+      if (Number.isNaN(sa)) return 1;
+      if (Number.isNaN(sb)) return -1;
+      return sa - sb;
+    });
+    this.onEvent({ type: "edge-play", count: ordered.length });
+    const jobs = ordered.map((u, i) => ({
       uri: u,
       fileName: `seg_${String(i).padStart(6, "0")}.ts`,
       seq: i,
     }));
     const { results } = await downloader.downloadSegments(jobs, {
       outDir: this.workDir,
-      headers: this.buildHeaders(ctx, segUrls[0]),
+      headers: this.buildHeaders(ctx, ordered[0]),
       concurrency: this.concurrency,
       onProgress: (p) => this.onEvent({ type: "progress", ...p }),
     });
     const ok = results.filter((r) => r && r.ok).sort((a, b) => a.seq - b.seq);
     return this.merge(ok);
+  }
+
+  /** 爱奇艺「单文件字节区间」合并：
+   *  播放器把同一个 .ts 文件按 start/end 字节区间拉取，重拉后按 start 顺序原始字节拼接即为整片。
+   *  不能用 m3u8/concat 分离器（区间中段从 TS 包中间开始，不是独立可解文件）。 */
+  async iqiyiByteRangeMerge(segUrls, ctx, expectedDuration = null) {
+    const startOf = (u) => {
+      const m = /[?&]start=(\d+)/.exec(String(u));
+      return m ? Number(m[1]) : NaN;
+    };
+    const ordered = [...segUrls].sort((a, b) => {
+      const sa = startOf(a);
+      const sb = startOf(b);
+      if (Number.isNaN(sa) && Number.isNaN(sb)) return 0;
+      if (Number.isNaN(sa)) return 1;
+      if (Number.isNaN(sb)) return -1;
+      return sa - sb;
+    });
+    this.onEvent({ type: "edge-play", count: ordered.length });
+    this.onLog({
+      level: "info",
+      msg: "爱奇艺字节区间模式：按 start 排序后重拉分片，再原始字节拼接",
+    });
+    const jobs = ordered.map((u, i) => ({
+      uri: u,
+      fileName: `raw_${String(i).padStart(6, "0")}.ts`,
+      seq: i,
+    }));
+    const { results } = await downloader.downloadSegments(jobs, {
+      outDir: this.workDir,
+      headers: this.buildHeaders(ctx, ordered[0]),
+      concurrency: this.concurrency,
+      onProgress: (p) => this.onEvent({ type: "progress", ...p }),
+    });
+
+    // 逐文件校验：过期签名/调度接口会返回小体积 JSON/HTML 文本，必须剔除
+    const mediaFiles = [];
+    for (const r of results) {
+      if (!r || !r.ok || !r.local) continue;
+      try {
+        const buf = Buffer.alloc(64);
+        const fd = fs.openSync(r.local, "r");
+        fs.readSync(fd, buf, 0, 64, 0);
+        fs.closeSync(fd);
+        const head = buf.toString("utf8").trimStart();
+        if (head.startsWith("{") || head.startsWith("<")) {
+          this.onLog({
+            level: "info",
+            msg: `丢弃非媒体响应（${path.basename(r.local)} 开头是 JSON/HTML，可能签名过期）`,
+          });
+          continue;
+        }
+      } catch (_) {
+        /* 读不到头就当媒体文件交给 ffmpeg 判 */
+      }
+      mediaFiles.push(r.local);
+    }
+    if (mediaFiles.length === 0)
+      throw new Error(
+        "分片下载后全是错误响应（签名可能过期）。请回到浏览器窗口刷新页面、让视频重新播放后，再点一次下载。",
+      );
+
+    // 原始字节顺序拼接（同一次 HTTP 响应内的字节序即文件字节序）
+    const mergedTs = path.join(this.workDir, "full.ts");
+    const out = fs.createWriteStream(mergedTs);
+    for (const f of mediaFiles) {
+      await new Promise((resolve, reject) => {
+        const rs = fs.createReadStream(f);
+        rs.on("error", reject);
+        out.on("error", reject);
+        rs.pipe(out, { end: false });
+        rs.on("end", resolve);
+      });
+    }
+    await new Promise((resolve) => out.end(resolve));
+    this.onLog({
+      level: "info",
+      msg: `拼接完成：${mediaFiles.length} 段 → ${fs.statSync(mergedTs).size} 字节`,
+    });
+
+    // 时长校验：拼出的整片明显短于页面时长 = 分片没抓全，提示拖进度条而不是产出残缺文件
+    if (this.ffmpegPath) {
+      const dur = await ffmpeg.probeDuration(this.ffmpegPath, mergedTs, {
+        onLine: () => {},
+      });
+      this.onLog({
+        level: "info",
+        msg: `拼接后整片时长：${dur ? Math.round(dur) + " 秒" : "未知"}` +
+          (expectedDuration ? `（页面视频 ${Math.round(expectedDuration)} 秒）` : ""),
+      });
+      if (dur && expectedDuration && dur < expectedDuration * 0.85) {
+        throw new Error(
+          `分片没抓全（拼出 ${Math.round(dur)} 秒 / 正片约 ${Math.round(
+            expectedDuration,
+          )} 秒）。请在浏览器窗口里把进度条从最开头拖到最末尾拖一遍（每个位置停 1~2 秒），等分片数不再涨后再点下载。`,
+        );
+      }
+    }
+
+    const outFile = path.join(this.downloadDir, `video_${Date.now()}.mp4`);
+    this.onEvent({ type: "merge-start", file: outFile });
+    await ffmpeg.remuxTs(this.ffmpegPath, mergedTs, outFile, {
+      onLine: (l) => this.onLog({ level: "info", msg: l.trim() }),
+    });
+    this.onEvent({ type: "merge-done", file: outFile });
+    return outFile;
+  }
+
+  /** 读取页面 <video> 的时长（秒），用于校验边播边存拼出的整片是否完整 */
+  async getPageDuration() {
+    if (!this.viewWc || this.viewWc.isDestroyed()) return null;
+    try {
+      const d = await this.viewWc.executeJavaScript(
+        `(() => { let best = 0; document.querySelectorAll('video').forEach(v => { if (Number.isFinite(v.duration) && v.duration > best) best = v.duration; }); return best; })()`,
+        true,
+      );
+      return d && d > 0 ? d : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /** 组装本地 m3u8 并交给 ffmpeg 一步合并（AES 解密 + fMP4 + 转封装） */
@@ -588,6 +775,22 @@ export class BrowserInterceptEngine {
 /** 从捕获到的 m3u8 列表里挑最像媒体流的（优先带 .m3u8 且非广告前缀）。简单策略：取第一个 */
 function pickM3u8(list) {
   return list.length ? list[0] : null;
+}
+
+/** 爱奇艺调度接口判定：pcw-data.video.iqiyi.com 的 .ts URL 返回 JSON（CDN 节点列表），不是媒体内容 */
+function isIqiyiScheduler(u) {
+  return /pcw-data\.video\.iqiyi\.com/i.test(String(u || ""));
+}
+
+/** 爱奇艺广告分片判定：只对爱奇艺/71edge 特征 URL 生效，避免误伤其它站。
+ *  正片：/videos/v1ts/ 路径、.ts、qd_tvid 非空；广告：/videos/other/、.f4v、qd_tvid 为空。 */
+function isIqiyiAd(u) {
+  const s = String(u || "");
+  if (!/iqiyi|71edge|qd_tvid|\/videos\/v1ts\//i.test(s)) return false;
+  if (/\/videos\/other\//i.test(s)) return true;
+  if (/\.f4v(\?|$)/i.test(s)) return true;
+  if (!/[?&]qd_tvid=[^&]/.test(s)) return true;
+  return false;
 }
 
 /** content-type → 弱提示「video / audio」：只作探测失败时的兜底，不作为最终判定 */

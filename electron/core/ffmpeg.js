@@ -160,6 +160,44 @@ function parseProbe(stderr) {
   return out;
 }
 
+/** 单个完整 TS 文件转封装为 mp4（爱奇艺字节区间拼接后的整片用）。
+ *  先 -c copy 直封；部分 TS 的 AAC 流缺采样率字段会导致直封失败，此时只重编码音频、视频仍 copy。 */
+export async function remuxTs(
+  ffmpegPath,
+  inputTs,
+  outputFile,
+  { onLine = () => {} } = {},
+) {
+  const common = ["-y", "-i", inputTs, "-movflags", "+faststart"];
+  try {
+    await runSpawn(ffmpegPath, [...common, "-c", "copy", outputFile], {
+      onLine,
+    });
+  } catch (e) {
+    onLine(
+      "直接封装失败（常见于音频流缺采样率），改为音频重编码重试：" +
+        String((e && e.message) || e).split("\n")[0],
+    );
+    await runSpawn(
+      ffmpegPath,
+      [
+        ...common,
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-ar",
+        "48000",
+        "-b:a",
+        "128k",
+        outputFile,
+      ],
+      { onLine },
+    );
+  }
+  return outputFile;
+}
+
 /** 音视频双流合成：纯画面 + 纯声音 → 一个 mp4（-c copy 不重编码，秒级无损） */
 export async function mergeAV(
   ffmpegPath,
